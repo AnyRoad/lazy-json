@@ -7,10 +7,10 @@ import (
 	textinput "github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/andrei/lazy-json/internal/document"
-	"github.com/andrei/lazy-json/internal/integration"
-	"github.com/andrei/lazy-json/internal/session"
-	"github.com/andrei/lazy-json/internal/source"
+	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/integration"
+	"github.com/anyroad/lazy-json/internal/session"
+	"github.com/anyroad/lazy-json/internal/source"
 )
 
 type Model struct {

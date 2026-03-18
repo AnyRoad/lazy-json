@@ -6,9 +6,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/andrei/lazy-json/internal/document"
-	"github.com/andrei/lazy-json/internal/session"
-	"github.com/andrei/lazy-json/internal/source"
+	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/session"
+	"github.com/anyroad/lazy-json/internal/source"
 )
 
 func (m *Model) theme() Theme {

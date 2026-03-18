@@ -3,7 +3,7 @@ package session
 import (
 	"strings"
 
-	"github.com/andrei/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/document"
 )
 
 type SearchState struct {

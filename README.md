@@ -1,11 +1,15 @@
 # lazy-json
 
-`lazy-json` is a keyboard-first JSON viewer and editor for the terminal, built with Go and Bubble Tea.
+[![CI](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml/badge.svg?branch=release)](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml?query=branch%3Arelease)
+[![Release](https://img.shields.io/github/v/release/anyroad/lazy-json)](https://github.com/anyroad/lazy-json/releases)
+[![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://go.dev/dl/)
 
-## Current v1 scope
+`lazy-json` is a keyboard-first JSON viewer and editor for the terminal, built with Go and Bubble Tea. It focuses on structured JSON editing instead of raw text editing: move around a tree, expand and collapse nodes, search, edit scalars, add and remove nodes, hand subtrees to your external editor, and optionally run `jq` transforms without leaving the app.
+
+## Features
 
 - tree-first navigation with `h/j/k/l`, `gg`, and `G`
-- ordered object rendering with syntax highlighting
+- ordered object rendering with syntax highlighting and switchable themes
 - collapse and expand for objects and arrays
 - substring search with `/`, `n`, and `N`
 - structured editing for scalars, object keys, object fields, and array items
@@ -13,63 +17,168 @@
 - file-backed and stdin-backed sessions
 - optional subtree editing through `$EDITOR`
 - optional `jq` transforms through `:jq` and `:jq!`
-- switchable color themes
 
-## Usage
+## Quick Start
 
-Open a file:
+### Install from source
+
+```bash
+git clone https://github.com/anyroad/lazy-json.git
+cd lazy-json
+make build
+./dist/lazy-json testdata/basic.json
+```
+
+### Build directly with Go
+
+```bash
+go build -o dist/lazy-json ./cmd/lazy-json
+./dist/lazy-json testdata/basic.json
+```
+
+### Open a file
 
 ```bash
 lazy-json data.json
 ```
 
-Read from stdin:
+### Open JSON from stdin
 
 ```bash
 cat data.json | lazy-json
 ```
 
-## Keybindings
+### Optional tools
+
+- `jq` enables `:jq` and `:jq!` transform commands
+- `$EDITOR` enables subtree editing with `E`
+
+## User Guide
+
+### Session types
+
+`lazy-json` starts in one of two modes:
+
+- file-backed: `lazy-json data.json`
+- stdin-backed: `cat data.json | lazy-json`
+
+File-backed sessions save back to the original path with `:w`. Stdin-backed sessions do not have a default file target, so use `:w path.json` to save to disk or `:print` to write the current document to stdout.
 
 ### Navigation
 
-- `j` / `k`: move selection
-- `h` / `l`: collapse or expand / move to parent or child
-- `gg` / `G`: jump to top or bottom
-- `?`: toggle help
+- `j` / `k`: move the selection up or down through visible rows
+- `h`: collapse the current container, or move to the parent row
+- `l`: expand the current container, or move into the first child
+- `gg` / `G`: jump to the first or last visible row
+- `?`: open the built-in help screen
+- `t`: switch color theme
 
-### Editing
+### Editing model
 
-- `e`: edit selected scalar value as JSON
-- `E`: edit selected node or subtree in `$EDITOR`
-- `a`: add an object field or array item
+The editor is structured, not freeform. You operate on the selected node:
+
+- `e`: edit the selected scalar value as JSON, such as `"text"`, `42`, `true`, or `null`
+- `a`: add a new field to an object or append a new value to an array
 - `r`: rename the selected object key
 - `d`: delete the selected node
+- `E`: serialize the selected node or subtree into a temp file, open it in `$EDITOR`, and replace the node only if the edited JSON parses successfully
 
-### Search and commands
+This keeps edits valid and avoids the complexity of embedding a full text editor into the TUI.
 
-- `/`: search keys, scalar values, and paths
-- `n` / `N`: next or previous search hit
-- `:`: open command mode
-- `:w`: save to the current file
+### Search
+
+- `/`: open search
+- `n`: jump to the next match
+- `N`: jump to the previous match
+
+Search matches visible rows based on keys, scalar values, and rendered JSON paths. If a subtree is collapsed, rows hidden inside that subtree are not searchable until expanded.
+
+### Commands
+
+- `:w`: save to the current file path
 - `:w path.json`: save to a specific path
-- `:x`: save and quit, or print to stdout for stdin-backed sessions
+- `:x`: save and quit for file-backed sessions; for stdin-backed sessions with no file path, print to stdout and quit
 - `:print`: print canonical JSON to stdout and quit
-- `:q` / `:q!`: quit / force quit
-- `:jq EXPR`: apply `jq` to the whole document
-- `:jq! EXPR`: apply `jq` to the selected subtree
-- `:theme`: switch theme
+- `:q`: quit if there are no unsaved changes
+- `:q!`: quit without saving
+- `:theme`: switch to the next theme
+- `:edit-external`: same behavior as `E`
+- `:jq EXPR`: apply a `jq` expression to the whole document
+- `:jq! EXPR`: apply a `jq` expression to the selected subtree
 
-## Notes
+### Examples
 
-- saves always rewrite the document as canonical pretty JSON
-- `jq` is optional; the editor stays usable without it
-- `$EDITOR` is optional; `E` reports an error if it is not configured
-
-## Development
-
-Run tests with a writable Go cache:
+Edit a file and save it back:
 
 ```bash
-GOCACHE=/tmp/lazy-json-gocache GOMODCACHE=/tmp/lazy-json-gomodcache go test ./...
+lazy-json config.json
 ```
+
+Pipe JSON in, modify it, then print the result:
+
+```bash
+cat config.json | lazy-json
+```
+
+Transform a whole document with `jq` inside the editor:
+
+```text
+:jq .items |= map(select(.enabled == true))
+```
+
+Transform just the selected subtree:
+
+```text
+:jq! .version = "2"
+```
+
+### Save behavior
+
+All saves rewrite the current document as canonical pretty JSON. The tool does not preserve the original whitespace layout.
+
+## Developer Guide
+
+### Make targets
+
+- `make fmt`: rewrite Go files with `gofmt`
+- `make fmt-check`: fail if formatting is not clean
+- `make vet`: run `go vet ./...`
+- `make test`: run `go test ./...`
+- `make build`: build `dist/lazy-json` for the current platform
+- `make build-all`: cross-compile release binaries for the supported target set
+- `make check`: run format check, vet, and tests
+- `make clean`: remove `dist/`
+
+### Local workflow
+
+Recommended local check before pushing:
+
+```bash
+make check
+make build
+```
+
+If you need writable Go cache directories in a restricted environment:
+
+```bash
+GOCACHE=/tmp/lazy-json-gocache GOMODCACHE=/tmp/lazy-json-gomodcache make check
+```
+
+### GitHub Actions
+
+- `CI`: runs on pushes and pull requests targeting the `release` branch, and executes `make check` plus `make build`
+- `Release`: runs when a tag matching `v*` is pushed, cross-compiles release archives for Linux, macOS, and Windows, generates checksums, and uploads them to GitHub Releases
+
+Create a release tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+## Current Limitations
+
+- saves always rewrite canonical JSON formatting
+- search only indexes visible rows
+- `jq` is optional; commands fail cleanly when it is missing
+- `$EDITOR` is optional; external edit fails cleanly when it is not configured

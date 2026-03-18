@@ -1,4 +1,4 @@
-module github.com/andrei/lazy-json
+module github.com/anyroad/lazy-json
 
 go 1.25
 

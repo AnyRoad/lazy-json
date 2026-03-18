@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/andrei/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/document"
 )
 
 func TestSerializeAndReadEditedNode(t *testing.T) {

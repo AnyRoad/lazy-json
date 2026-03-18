@@ -7,9 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/andrei/lazy-json/internal/document"
-	"github.com/andrei/lazy-json/internal/source"
-	"github.com/andrei/lazy-json/internal/tui"
+	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/source"
+	"github.com/anyroad/lazy-json/internal/tui"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/andrei/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/document"
 )
 
 func SerializeNodeToTemp(node *document.Node) (string, error) {

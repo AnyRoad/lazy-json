@@ -3,8 +3,8 @@ package session
 import (
 	"testing"
 
-	"github.com/andrei/lazy-json/internal/document"
-	"github.com/andrei/lazy-json/internal/source"
+	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/source"
 )
 
 func testDoc(t *testing.T) *document.Document {

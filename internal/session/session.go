@@ -3,8 +3,8 @@ package session
 import (
 	"slices"
 
-	"github.com/andrei/lazy-json/internal/document"
-	"github.com/andrei/lazy-json/internal/source"
+	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/source"
 )
 
 type Mode string
