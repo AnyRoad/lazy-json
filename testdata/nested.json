@@ -1,0 +1,19 @@
+{
+  "user": {
+    "name": "Ada",
+    "roles": [
+      "admin",
+      "editor"
+    ]
+  },
+  "items": [
+    {
+      "id": 1,
+      "title": "alpha"
+    },
+    {
+      "id": 2,
+      "title": "beta"
+    }
+  ]
+}
