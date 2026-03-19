@@ -82,12 +82,12 @@
 - Modify: `internal/tui/model.go`
 - Modify: `internal/tui/model_test.go`
 
-- [ ] load settings and discovered themes before constructing the Bubble Tea model
-- [ ] initialize the active session theme from persisted settings and fall back to the default built-in theme when the configured theme is unavailable
-- [ ] inject the theme registry and mutable settings state into the model while keeping `Session.ThemeName` as the active render choice
-- [ ] write tests for persisted-theme startup, missing-theme fallback, and non-fatal warning propagation
-- [ ] write tests for registry-backed `t` theme cycling and unchanged startup behavior when no config exists
-- [ ] run tests: `go test ./...`
+- [x] load settings and discovered themes before constructing the Bubble Tea model
+- [x] initialize the active session theme from persisted settings and fall back to the default built-in theme when the configured theme is unavailable
+- [x] inject the theme registry and mutable settings state into the model while keeping `Session.ThemeName` as the active render choice
+- [x] write tests for persisted-theme startup, missing-theme fallback, and non-fatal warning propagation
+- [x] write tests for registry-backed `t` theme cycling and unchanged startup behavior when no config exists
+- [x] run tests: `go test ./...`
 
 ### Task 4: Build the settings modal and explicit save flow
 

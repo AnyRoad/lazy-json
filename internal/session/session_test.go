@@ -18,7 +18,7 @@ func testDoc(t *testing.T) *document.Document {
 
 func TestRefreshAndPaths(t *testing.T) {
 	doc := testDoc(t)
-	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"})
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
 	if len(s.Rows) != 3 {
 		t.Fatalf("rows = %d, want 3", len(s.Rows))
 	}
@@ -37,7 +37,7 @@ func TestRefreshAndPaths(t *testing.T) {
 
 func TestCollapseAndReselectVisible(t *testing.T) {
 	doc := testDoc(t)
-	s := New(doc, source.Input{Kind: source.KindStdin})
+	s := New(doc, source.Input{Kind: source.KindStdin}, "")
 	itemsID := doc.Root.Object[1].Value.ID
 	s.Expanded[itemsID] = true
 	firstItemID := doc.Root.Object[1].Value.Array[0].ID
@@ -54,7 +54,7 @@ func TestCollapseAndReselectVisible(t *testing.T) {
 
 func TestSearchHits(t *testing.T) {
 	doc := testDoc(t)
-	s := New(doc, source.Input{Kind: source.KindFile})
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
 	itemsID := doc.Root.Object[1].Value.ID
 	s.Expanded[itemsID] = true
 	s.Expanded[doc.Root.Object[1].Value.Array[0].ID] = true

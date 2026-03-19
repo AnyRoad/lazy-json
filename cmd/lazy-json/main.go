@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/source"
 	"github.com/anyroad/lazy-json/internal/tui"
@@ -33,7 +35,7 @@ func run(args []string) error {
 		return fmt.Errorf("parse json: %w", err)
 	}
 
-	model := tui.NewModel(doc, input)
+	model := tui.NewModel(doc, input, loadModelOptions())
 	opts := []tea.ProgramOption{}
 	if input.Kind == source.KindStdin {
 		opts = append(opts, tea.WithInputTTY())
@@ -53,4 +55,57 @@ func run(args []string) error {
 		}
 	}
 	return nil
+}
+
+func loadModelOptions() tui.ModelOptions {
+	paths, err := config.ResolvePaths()
+	if err != nil {
+		return tui.ModelOptions{
+			Warnings: []string{fmt.Sprintf("resolve config paths: %v", err)},
+		}
+	}
+	return loadModelOptionsFromPaths(paths)
+}
+
+func loadModelOptionsFromPaths(paths config.Paths) tui.ModelOptions {
+	options := tui.ModelOptions{
+		ThemeRegistry: tui.BuiltinThemeRegistry(),
+		Settings:      config.DefaultSettings(),
+	}
+
+	settings, warnings := config.LoadSettings(paths.SettingsFile)
+	options.Settings = settings
+	options.Warnings = append(options.Warnings, warnings...)
+
+	discovered, warnings := config.DiscoverThemes(paths.ThemesDir)
+	options.Warnings = append(options.Warnings, warnings...)
+
+	registry, warnings := tui.NewThemeRegistry(discovered)
+	options.ThemeRegistry = registry
+	options.Warnings = append(options.Warnings, warnings...)
+
+	options.Settings, warnings = resolveStartupSettings(options.Settings, options.ThemeRegistry)
+	options.Warnings = append(options.Warnings, warnings...)
+
+	return options
+}
+
+func resolveStartupSettings(settings config.Settings, registry tui.ThemeRegistry) (config.Settings, []string) {
+	requested := strings.TrimSpace(settings.Theme)
+	settings = settings.WithDefaults()
+
+	theme, ok := registry.Lookup(settings.Theme)
+	if ok {
+		settings.Theme = theme.Name
+		return settings, nil
+	}
+
+	settings = config.DefaultSettings()
+	if requested == "" || strings.EqualFold(requested, config.DefaultThemeName) {
+		return settings, nil
+	}
+
+	return settings, []string{
+		fmt.Sprintf("configured theme %q not found; using %q", requested, config.DefaultThemeName),
+	}
 }

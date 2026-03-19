@@ -5,17 +5,23 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/source"
 )
 
 func testModel(t *testing.T) *Model {
 	t.Helper()
+	return testModelWithOptions(t, ModelOptions{})
+}
+
+func testModelWithOptions(t *testing.T, options ModelOptions) *Model {
+	t.Helper()
 	doc, err := document.Parse([]byte(`{"name":"Ada","items":[1,2]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"})
+	return NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, options)
 }
 
 func key(s string) tea.KeyMsg {
@@ -45,7 +51,17 @@ func runCmd(t *testing.T, m *Model, cmd tea.Cmd) {
 }
 
 func TestNavigationAndThemeSwitch(t *testing.T) {
-	m := testModel(t)
+	registry, warnings := NewThemeRegistry([]config.DiscoveredTheme{
+		{Path: "10-mist.json", Spec: config.ThemeSpec{Name: "mist"}},
+	})
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+
+	m := testModelWithOptions(t, ModelOptions{
+		ThemeRegistry: registry,
+		Settings:      config.Settings{Theme: "ember"},
+	})
 	updated, _ := m.Update(key("j"))
 	m = updated.(*Model)
 	if m.Session.SelectedID != m.Doc.Root.Object[0].Value.ID {
@@ -53,7 +69,7 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 	}
 	updated, _ = m.Update(key("t"))
 	m = updated.(*Model)
-	if m.Session.ThemeName != "harbor" {
+	if m.Session.ThemeName != "mist" {
 		t.Fatalf("ThemeName = %q", m.Session.ThemeName)
 	}
 }

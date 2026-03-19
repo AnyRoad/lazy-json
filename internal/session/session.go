@@ -2,7 +2,9 @@ package session
 
 import (
 	"slices"
+	"strings"
 
+	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/source"
 )
@@ -33,17 +35,21 @@ type Session struct {
 	Error      string
 }
 
-func New(doc *document.Document, src source.Input) *Session {
+func New(doc *document.Document, src source.Input, themeName string) *Session {
 	expanded := map[document.NodeID]bool{}
 	if doc != nil && doc.Root != nil {
 		expanded[doc.Root.ID] = true
+	}
+	themeName = strings.TrimSpace(themeName)
+	if themeName == "" {
+		themeName = config.DefaultThemeName
 	}
 	s := &Session{
 		Expanded:   expanded,
 		SourceKind: src.Kind,
 		SourcePath: src.Path,
 		Mode:       ModeNormal,
-		ThemeName:  "forest",
+		ThemeName:  themeName,
 	}
 	s.Refresh(doc)
 	return s

@@ -7,31 +7,68 @@ import (
 	textinput "github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/integration"
 	"github.com/anyroad/lazy-json/internal/session"
 	"github.com/anyroad/lazy-json/internal/source"
 )
 
-type Model struct {
-	Doc        *document.Document
-	Session    *session.Session
-	Width      int
-	Height     int
-	prompt     textinput.Model
-	promptKind promptKind
-	lastKey    string
-	ExitOutput []byte
-	JQRunner   integration.JQRunner
+type ModelOptions struct {
+	ThemeRegistry ThemeRegistry
+	Settings      config.Settings
+	Warnings      []string
 }
 
-func NewModel(doc *document.Document, src source.Input) *Model {
-	return &Model{
-		Doc:        doc,
-		Session:    session.New(doc, src),
-		prompt:     newPrompt(),
-		promptKind: promptNone,
+type Model struct {
+	Doc           *document.Document
+	Session       *session.Session
+	ThemeRegistry ThemeRegistry
+	Settings      config.Settings
+	Width         int
+	Height        int
+	prompt        textinput.Model
+	promptKind    promptKind
+	lastKey       string
+	ExitOutput    []byte
+	JQRunner      integration.JQRunner
+}
+
+func NewModel(doc *document.Document, src source.Input, options ...ModelOptions) *Model {
+	opts := ModelOptions{}
+	if len(options) > 0 {
+		opts = options[0]
 	}
+	opts = opts.withDefaults()
+
+	model := &Model{
+		Doc:           doc,
+		Session:       session.New(doc, src, opts.Settings.Theme),
+		ThemeRegistry: opts.ThemeRegistry,
+		Settings:      opts.Settings,
+		prompt:        newPrompt(),
+		promptKind:    promptNone,
+	}
+	if message := startupWarningMessage(opts.Warnings); message != "" {
+		model.Session.SetStatus(message)
+	}
+	return model
+}
+
+func (o ModelOptions) withDefaults() ModelOptions {
+	if !o.ThemeRegistry.hasThemes {
+		o.ThemeRegistry = BuiltinThemeRegistry()
+	}
+	o.Settings = o.Settings.WithDefaults()
+	o.Settings.Theme = o.ThemeRegistry.ThemeByName(o.Settings.Theme).Name
+	return o
+}
+
+func startupWarningMessage(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+	return "warning: " + strings.Join(warnings, "; ")
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -144,9 +181,7 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "N":
 		m.Session.NextSearchHit(true)
 	case "t":
-		next := NextTheme(m.Session.ThemeName)
-		m.Session.ThemeName = next.Name
-		m.Session.SetStatus("switched theme to " + next.Name)
+		m.cycleTheme()
 	case "?":
 		m.Session.Help = true
 	case "q", "ctrl+c":
@@ -160,6 +195,12 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.lastKey = ""
 	}
 	return m, nil
+}
+
+func (m *Model) cycleTheme() {
+	next := m.ThemeRegistry.NextTheme(m.Session.ThemeName)
+	m.Session.ThemeName = next.Name
+	m.Session.SetStatus("switched theme to " + next.Name)
 }
 
 func (m *Model) startScalarEdit() tea.Cmd {

@@ -276,9 +276,7 @@ func (m *Model) handleCommand(command string) tea.Cmd {
 	case command == "q!":
 		return tea.Quit
 	case command == "theme":
-		next := NextTheme(m.Session.ThemeName)
-		m.Session.ThemeName = next.Name
-		m.Session.SetStatus("switched theme to " + next.Name)
+		m.cycleTheme()
 		return nil
 	case strings.HasPrefix(command, "jq! "):
 		expr := strings.TrimSpace(strings.TrimPrefix(command, "jq! "))

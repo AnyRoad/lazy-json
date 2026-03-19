@@ -12,7 +12,7 @@ import (
 )
 
 func (m *Model) theme() Theme {
-	return ThemeByName(m.Session.ThemeName)
+	return m.ThemeRegistry.ThemeByName(m.Session.ThemeName)
 }
 
 func (m *Model) View() string {
