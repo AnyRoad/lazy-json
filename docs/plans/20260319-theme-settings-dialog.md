@@ -66,12 +66,12 @@
 - Modify: `internal/tui/theme.go`
 - Create: `internal/tui/theme_test.go`
 
-- [ ] replace the package-global theme slice with registry APIs for listing, lookup, and next-theme cycling
-- [ ] add additional built-in palettes, including at least one light theme, while preserving the existing built-ins
-- [ ] convert discovered theme specs into runtime `Theme` values with slot-level fallback to default styles
-- [ ] write tests for registry lookup, missing-theme fallback, and next-theme cycling across built-in and external themes
-- [ ] write tests for partial external theme conversion and stable theme ordering
-- [ ] run tests: `go test ./...`
+- [x] replace the package-global theme slice with registry APIs for listing, lookup, and next-theme cycling
+- [x] add additional built-in palettes, including at least one light theme, while preserving the existing built-ins
+- [x] convert discovered theme specs into runtime `Theme` values with slot-level fallback to default styles
+- [x] write tests for registry lookup, missing-theme fallback, and next-theme cycling across built-in and external themes
+- [x] write tests for partial external theme conversion and stable theme ordering
+- [x] run tests: `go test ./...`
 
 ### Task 3: Load settings at startup and wire registry-backed theme state into the app
 
