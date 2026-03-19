@@ -23,7 +23,7 @@ func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) 
 	updated, _ := m.Update(key("S"))
 	m = updated.(*Model)
 
-	if !m.settings.open {
+	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed, want open")
 	}
 	if got, want := m.Session.Mode, "settings"; string(got) != want {
@@ -46,7 +46,7 @@ func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) 
 	updated, _ = m.Update(specialKey(tea.KeyEsc))
 	m = updated.(*Model)
 
-	if m.settings.open {
+	if m.settingsOpen() {
 		t.Fatal("settings dialog is open, want closed")
 	}
 	if got, want := m.Session.ThemeName, "harbor"; got != want {
@@ -72,7 +72,7 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	m.prompt.SetValue("settings")
 	runCmd(t, m, m.submitPrompt())
 
-	if !m.settings.open {
+	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed after :settings, want open")
 	}
 
@@ -87,7 +87,7 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	if got, want := m.Settings.Theme, "harbor"; got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
-	if !m.settings.open {
+	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed after save, want open")
 	}
 	if got, want := m.Session.Status, `saved theme "harbor"`; got != want {
@@ -105,13 +105,13 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 
 func TestSettingsSaveFailureKeepsDialogOpen(t *testing.T) {
 	blockedPath := filepath.Join(t.TempDir(), "blocked")
-	if err := os.WriteFile(blockedPath, []byte("blocker"), 0o644); err != nil {
-		t.Fatalf("WriteFile(%q) error = %v", blockedPath, err)
+	if err := os.Mkdir(blockedPath, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q) error = %v", blockedPath, err)
 	}
 
 	m := testModelWithOptions(t, ModelOptions{
 		Settings:     config.Settings{Theme: config.DefaultThemeName},
-		SettingsPath: filepath.Join(blockedPath, config.SettingsFileName),
+		SettingsPath: blockedPath,
 	})
 
 	updated, _ := m.Update(key("S"))
@@ -121,14 +121,14 @@ func TestSettingsSaveFailureKeepsDialogOpen(t *testing.T) {
 	updated, _ = m.Update(key("s"))
 	m = updated.(*Model)
 
-	if !m.settings.open {
+	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed after failed save, want open")
 	}
 	if got, want := m.Settings.Theme, config.DefaultThemeName; got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
-	if m.Session.Error == "" {
-		t.Fatal("Error is empty after failed save")
+	if !strings.Contains(m.Session.Error, "write settings") {
+		t.Fatalf("Error = %q, want write settings failure", m.Session.Error)
 	}
 }
 
@@ -151,7 +151,7 @@ func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
 	if got, want := m.Session.ThemeName, "ember"; got != want {
 		t.Fatalf("ThemeName = %q, want %q", got, want)
 	}
-	if !m.settings.open {
+	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed, want open")
 	}
 }

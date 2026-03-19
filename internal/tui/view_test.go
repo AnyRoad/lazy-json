@@ -72,21 +72,44 @@ func TestViewUsesRegistryThemeForRendering(t *testing.T) {
 }
 
 func TestViewShowsSettingsOverlayHints(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
 	m := testModelWithOptions(t, ModelOptions{
-		Settings: config.Settings{Theme: config.DefaultThemeName},
+		Settings:     config.Settings{Theme: config.DefaultThemeName},
+		SettingsPath: paths.SettingsFile,
 	})
 	m.Width = 120
 	m.Height = 20
 	m.openSettings()
 
-	view := m.View()
-	if !strings.Contains(view, "Theme Settings") {
-		t.Fatalf("View() = %q, want settings title", view)
+	initialView := m.View()
+	if !strings.Contains(initialView, "Theme Settings") {
+		t.Fatalf("View() = %q, want settings title", initialView)
 	}
-	if !strings.Contains(view, "preview only") && !strings.Contains(view, "saved") {
-		t.Fatalf("View() = %q, want settings state hint", view)
+	if !strings.Contains(initialView, "saved") {
+		t.Fatalf("View() = %q, want saved state hint", initialView)
 	}
-	if !strings.Contains(view, "h/l preview  s save  esc close") {
-		t.Fatalf("View() = %q, want settings footer hint", view)
+	if !strings.Contains(initialView, "Saved theme: "+config.DefaultThemeName) {
+		t.Fatalf("View() = %q, want saved theme label", initialView)
+	}
+	if !strings.Contains(initialView, "h/l preview  s save  esc close") {
+		t.Fatalf("View() = %q, want settings footer hint", initialView)
+	}
+
+	m.previewSettingsTheme(1)
+	previewView := m.View()
+	if !strings.Contains(previewView, "preview only") {
+		t.Fatalf("View() = %q, want preview-only state hint", previewView)
+	}
+	if !strings.Contains(previewView, "Saved theme: "+config.DefaultThemeName) {
+		t.Fatalf("View() = %q, want original saved theme label during preview", previewView)
+	}
+
+	m.saveThemeSettings()
+	savedView := m.View()
+	if strings.Contains(savedView, "preview only") {
+		t.Fatalf("View() = %q, want preview-only hint cleared after save", savedView)
+	}
+	if !strings.Contains(savedView, "Saved theme: harbor") {
+		t.Fatalf("View() = %q, want updated saved theme label", savedView)
 	}
 }

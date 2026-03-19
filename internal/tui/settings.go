@@ -11,18 +11,16 @@ import (
 	"github.com/anyroad/lazy-json/internal/session"
 )
 
-type settingsDialog struct {
-	open bool
+func (m *Model) settingsOpen() bool {
+	return m.Session != nil && m.Session.Mode == session.ModeSettings
 }
 
 func (m *Model) openSettings() {
-	m.settings.open = true
 	m.Session.Mode = session.ModeSettings
 	m.lastKey = ""
 }
 
 func (m *Model) closeSettings() {
-	m.settings.open = false
 	m.Session.Mode = session.ModeNormal
 
 	if strings.EqualFold(m.Session.ThemeName, m.Settings.Theme) {

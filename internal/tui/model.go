@@ -29,7 +29,6 @@ type Model struct {
 	SettingsPath  string
 	Width         int
 	Height        int
-	settings      settingsDialog
 	prompt        textinput.Model
 	promptKind    promptKind
 	lastKey       string
@@ -116,7 +115,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.settings.open {
+		if m.settingsOpen() {
 			return m.updateSettings(msg)
 		}
 		switch m.promptKind {

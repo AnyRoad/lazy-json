@@ -106,6 +106,40 @@ func TestNewThemeRegistryConvertsPartialExternalThemesWithFallbacks(t *testing.T
 	}
 }
 
+func TestNewThemeRegistryWarnsOnInvalidColorsAndKeepsFallbackStyles(t *testing.T) {
+	discovered := []config.DiscoveredTheme{
+		{
+			Path: "10-mist.json",
+			Spec: config.ThemeSpec{
+				Name: "mist",
+				Key: &config.StyleSpec{
+					Foreground: "not-a-color",
+				},
+				Status: &config.StyleSpec{
+					Foreground: "#112233",
+				},
+			},
+		},
+	}
+
+	registry, warnings := NewThemeRegistry(discovered)
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want 1 warning", warnings)
+	}
+	if !strings.Contains(warnings[0], "10-mist.json") || !strings.Contains(warnings[0], "key.foreground") {
+		t.Fatalf("warning = %q, want invalid color warning", warnings[0])
+	}
+
+	base := registry.ThemeByName(config.DefaultThemeName)
+	mist := registry.ThemeByName("mist")
+	if got, want := mist.Key.GetForeground(), base.Key.GetForeground(); got != want {
+		t.Fatalf("mist key foreground = %#v, want %#v", got, want)
+	}
+	if got, want := mist.Status.GetForeground(), lipgloss.Color("#112233"); got != want {
+		t.Fatalf("mist status foreground = %#v, want %#v", got, want)
+	}
+}
+
 func TestNewThemeRegistryPreservesStableOrderingAndWarnsOnDuplicateNames(t *testing.T) {
 	discovered := []config.DiscoveredTheme{
 		{Path: "10-aurora.json", Spec: config.ThemeSpec{Name: "aurora"}},

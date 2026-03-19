@@ -33,7 +33,7 @@ func (m *Model) View() string {
 		height = 24
 	}
 	view := m.documentView(theme, width, height)
-	if m.settings.open {
+	if m.settingsOpen() {
 		return m.renderSettingsOverlay(view, theme, width, height)
 	}
 	return view
@@ -155,7 +155,7 @@ func (m *Model) renderFooter(theme Theme) string {
 }
 
 func (m *Model) footerHint() string {
-	if m.settings.open {
+	if m.settingsOpen() {
 		return "h/l preview  s save  esc close"
 	}
 	if m.promptKind != promptNone {

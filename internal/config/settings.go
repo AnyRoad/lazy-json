@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/anyroad/lazy-json/internal/source"
 )
 
 const (
@@ -89,7 +91,7 @@ func SaveSettings(path string, settings Settings) error {
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := source.WriteAtomic(path, data); err != nil {
 		return fmt.Errorf("write settings: %w", err)
 	}
 

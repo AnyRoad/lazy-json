@@ -3,9 +3,11 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/lucasb-eyer/go-colorful"
 
 	"github.com/anyroad/lazy-json/internal/config"
 )
@@ -54,7 +56,9 @@ func NewThemeRegistry(discovered []config.DiscoveredTheme) (ThemeRegistry, []str
 			warnings = append(warnings, fmt.Sprintf("skip theme %s: duplicate theme name %q", source, name))
 			continue
 		}
-		registry.add(themeFromSpec(candidate.Spec, base))
+		theme, themeWarnings := themeFromSpec(candidate.Spec, base, source)
+		warnings = append(warnings, themeWarnings...)
+		registry.add(theme)
 	}
 
 	return registry, warnings
@@ -127,40 +131,67 @@ func themeSource(path string) string {
 	return "theme"
 }
 
-func themeFromSpec(spec config.ThemeSpec, base Theme) Theme {
-	return Theme{
-		Name:      strings.TrimSpace(spec.Name),
-		Key:       applyStyleSpec(base.Key, spec.Key),
-		String:    applyStyleSpec(base.String, spec.String),
-		Number:    applyStyleSpec(base.Number, spec.Number),
-		Bool:      applyStyleSpec(base.Bool, spec.Bool),
-		Null:      applyStyleSpec(base.Null, spec.Null),
-		Muted:     applyStyleSpec(base.Muted, spec.Muted),
-		Selected:  applyStyleSpec(base.Selected, spec.Selected),
-		SearchHit: applyStyleSpec(base.SearchHit, spec.SearchHit),
-		Status:    applyStyleSpec(base.Status, spec.Status),
-		Error:     applyStyleSpec(base.Error, spec.Error),
-		Border:    applyStyleSpec(base.Border, spec.Border),
-		Help:      applyStyleSpec(base.Help, spec.Help),
-		Prompt:    applyStyleSpec(base.Prompt, spec.Prompt),
-	}
+func themeFromSpec(spec config.ThemeSpec, base Theme, source string) (Theme, []string) {
+	theme := Theme{Name: strings.TrimSpace(spec.Name)}
+	warnings := make([]string, 0)
+
+	theme.Key, warnings = applyStyleSpec(base.Key, spec.Key, source, "key", warnings)
+	theme.String, warnings = applyStyleSpec(base.String, spec.String, source, "string", warnings)
+	theme.Number, warnings = applyStyleSpec(base.Number, spec.Number, source, "number", warnings)
+	theme.Bool, warnings = applyStyleSpec(base.Bool, spec.Bool, source, "bool", warnings)
+	theme.Null, warnings = applyStyleSpec(base.Null, spec.Null, source, "null", warnings)
+	theme.Muted, warnings = applyStyleSpec(base.Muted, spec.Muted, source, "muted", warnings)
+	theme.Selected, warnings = applyStyleSpec(base.Selected, spec.Selected, source, "selected", warnings)
+	theme.SearchHit, warnings = applyStyleSpec(base.SearchHit, spec.SearchHit, source, "search_hit", warnings)
+	theme.Status, warnings = applyStyleSpec(base.Status, spec.Status, source, "status", warnings)
+	theme.Error, warnings = applyStyleSpec(base.Error, spec.Error, source, "error", warnings)
+	theme.Border, warnings = applyStyleSpec(base.Border, spec.Border, source, "border", warnings)
+	theme.Help, warnings = applyStyleSpec(base.Help, spec.Help, source, "help", warnings)
+	theme.Prompt, warnings = applyStyleSpec(base.Prompt, spec.Prompt, source, "prompt", warnings)
+
+	return theme, warnings
 }
 
-func applyStyleSpec(base lipgloss.Style, spec *config.StyleSpec) lipgloss.Style {
+func applyStyleSpec(base lipgloss.Style, spec *config.StyleSpec, source, slot string, warnings []string) (lipgloss.Style, []string) {
 	style := base
 	if spec == nil {
-		return style
+		return style, warnings
 	}
 	if foreground := strings.TrimSpace(spec.Foreground); foreground != "" {
-		style = style.Foreground(lipgloss.Color(foreground))
+		if isValidThemeColor(foreground) {
+			style = style.Foreground(lipgloss.Color(foreground))
+		} else {
+			warnings = append(warnings, invalidThemeColorWarning(source, slot, "foreground", foreground))
+		}
 	}
 	if background := strings.TrimSpace(spec.Background); background != "" {
-		style = style.Background(lipgloss.Color(background))
+		if isValidThemeColor(background) {
+			style = style.Background(lipgloss.Color(background))
+		} else {
+			warnings = append(warnings, invalidThemeColorWarning(source, slot, "background", background))
+		}
 	}
 	if spec.Bold != nil {
 		style = style.Bold(*spec.Bold)
 	}
-	return style
+	return style, warnings
+}
+
+func isValidThemeColor(value string) bool {
+	if strings.HasPrefix(value, "#") {
+		_, err := colorful.Hex(value)
+		return err == nil
+	}
+
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		return false
+	}
+	return number >= 0 && number <= 255
+}
+
+func invalidThemeColorWarning(source, slot, field, value string) string {
+	return fmt.Sprintf("theme %s %s.%s %q is invalid; using default", source, slot, field, value)
 }
 
 func builtinThemes() []Theme {

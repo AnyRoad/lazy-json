@@ -118,3 +118,18 @@ func TestSaveSettingsReturnsCreateDirFailure(t *testing.T) {
 		t.Fatalf("SaveSettings() error = %q, want create config dir failure", err)
 	}
 }
+
+func TestSaveSettingsReturnsWriteFailureWhenTargetIsDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings-dir")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q) error = %v", path, err)
+	}
+
+	err := SaveSettings(path, Settings{Theme: "harbor"})
+	if err == nil {
+		t.Fatal("SaveSettings() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "write settings") {
+		t.Fatalf("SaveSettings() error = %q, want write settings failure", err)
+	}
+}

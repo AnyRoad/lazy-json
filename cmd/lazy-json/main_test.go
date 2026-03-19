@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/source"
@@ -120,6 +122,32 @@ func TestLoadModelOptionsWarnsWhenConfigPathsCannotBeResolved(t *testing.T) {
 	}
 }
 
+func TestLoadModelOptionsResolverFailureDisablesSettingsSave(t *testing.T) {
+	model := newTestModel(t, loadModelOptionsWithResolver(func() (config.Paths, error) {
+		return config.Paths{}, errors.New("boom")
+	}))
+	model.Width = 120
+	model.Height = 20
+
+	updated, _ := model.Update(runeKey("S"))
+	model = updated.(*tui.Model)
+
+	view := model.View()
+	if !strings.Contains(view, "Save unavailable: config path could not be resolved.") {
+		t.Fatalf("View() = %q, want disabled save hint", view)
+	}
+
+	updated, _ = model.Update(runeKey("s"))
+	model = updated.(*tui.Model)
+
+	if got, want := string(model.Session.Mode), "settings"; got != want {
+		t.Fatalf("Mode = %q, want %q", got, want)
+	}
+	if !strings.Contains(model.Session.Error, "settings path unavailable") {
+		t.Fatalf("Error = %q, want settings path error", model.Session.Error)
+	}
+}
+
 func newTestModel(t *testing.T, options tui.ModelOptions) *tui.Model {
 	t.Helper()
 	doc, err := document.Parse([]byte(`{"name":"Ada"}`))
@@ -137,4 +165,8 @@ func writeTestFile(t *testing.T, path string, data []byte) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("WriteFile(%q): %v", path, err)
 	}
+}
+
+func runeKey(s string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
