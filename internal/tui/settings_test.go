@@ -182,7 +182,7 @@ func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
 	if !strings.Contains(initialView, " ember ") {
 		t.Fatalf("View() = %q, want ember selected", initialView)
 	}
-	if !strings.Contains(initialView, "4/6") {
+	if !strings.Contains(initialView, "5/7") {
 		t.Fatalf("View() = %q, want ember position", initialView)
 	}
 
@@ -199,7 +199,7 @@ func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
 	if !strings.Contains(externalView, " aurora ") {
 		t.Fatalf("View() = %q, want aurora selected", externalView)
 	}
-	if !strings.Contains(externalView, "6/6") {
+	if !strings.Contains(externalView, "7/7") {
 		t.Fatalf("View() = %q, want aurora position", externalView)
 	}
 }

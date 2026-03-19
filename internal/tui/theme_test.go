@@ -13,7 +13,7 @@ import (
 func TestBuiltinThemeRegistryLookupAndFallback(t *testing.T) {
 	registry := BuiltinThemeRegistry()
 
-	if got, want := themeNames(registry.Themes()), []string{"forest", "harbor", "paper", "ember"}; !reflect.DeepEqual(got, want) {
+	if got, want := themeNames(registry.Themes()), []string{"forest", "harbor", "paper", "nord", "ember"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Themes() = %v, want %v", got, want)
 	}
 
@@ -31,6 +31,14 @@ func TestBuiltinThemeRegistryLookupAndFallback(t *testing.T) {
 	}
 	if got, want := paper.Selected.GetBackground(), lipgloss.Color("#D9E8F5"); got != want {
 		t.Fatalf("paper selected background = %#v, want %#v", got, want)
+	}
+
+	nord, ok := registry.Lookup("NORD")
+	if !ok {
+		t.Fatal("Lookup(NORD) = false, want true")
+	}
+	if got, want := nord.Selected.GetBackground(), lipgloss.Color("#5E81AC"); got != want {
+		t.Fatalf("nord selected background = %#v, want %#v", got, want)
 	}
 
 	if got, want := registry.ThemeByName("missing").Name, config.DefaultThemeName; got != want {
@@ -149,7 +157,7 @@ func TestNewThemeRegistryPreservesStableOrderingAndWarnsOnDuplicateNames(t *test
 
 	registry, warnings := NewThemeRegistry(discovered)
 
-	if got, want := themeNames(registry.Themes()), []string{"forest", "harbor", "paper", "ember", "aurora", "zenith"}; !reflect.DeepEqual(got, want) {
+	if got, want := themeNames(registry.Themes()), []string{"forest", "harbor", "paper", "nord", "ember", "aurora", "zenith"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Themes() = %v, want %v", got, want)
 	}
 	if len(warnings) != 1 {
