@@ -17,8 +17,9 @@ Theme
   t         switch to the next theme preview
   S         open theme settings dialog
   h/l       previous / next theme in settings
-  s         save theme setting in settings
+  s         save preview to settings.json
   esc       close settings without saving
+  themes    built-ins + user config themes/*.json
 
 Commands
   :w        save

@@ -77,6 +77,7 @@ func (m *Model) saveThemeSettings() {
 	}
 
 	m.Settings = settings
+	m.SettingsPersisted = true
 	m.Session.SetStatus(fmt.Sprintf("saved theme %q", m.Settings.Theme))
 }
 
@@ -102,6 +103,14 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 	}
 
 	stateLabel := theme.Muted.Render("saved")
+	savedLabel := "Saved theme: " + savedTheme
+	if !m.SettingsPersisted {
+		stateLabel = theme.Status.Render("fallback")
+		savedLabel = "Saved theme unavailable; using " + savedTheme
+		if strings.TrimSpace(m.SettingsPath) == "" {
+			stateLabel = theme.Error.Render("unavailable")
+		}
+	}
 	if !strings.EqualFold(currentTheme, savedTheme) {
 		stateLabel = theme.Status.Render("preview only")
 	}
@@ -115,7 +124,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		theme.Status.Render("Theme Settings"),
 		"",
 		theme.Key.Render("Theme") + " " + theme.Selected.Render(" "+currentTheme+" ") + " " + theme.Muted.Render(position) + " " + stateLabel,
-		theme.Muted.Render("Saved theme: " + savedTheme),
+		theme.Muted.Render(savedLabel),
 		theme.Help.Render("h/left prev  l/right next  s save  esc close"),
 		saveHint,
 	}

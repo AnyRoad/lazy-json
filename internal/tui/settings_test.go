@@ -87,6 +87,9 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	if got, want := m.Settings.Theme, "harbor"; got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
+	if !m.SettingsPersisted {
+		t.Fatal("SettingsPersisted = false, want true after save")
+	}
 	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed after save, want open")
 	}
@@ -153,5 +156,50 @@ func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
 	}
 	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed, want open")
+	}
+}
+
+func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
+	registry, warnings := NewThemeRegistry([]config.DiscoveredTheme{
+		{Path: "10-mist.json", Spec: config.ThemeSpec{Name: "mist"}},
+		{Path: "20-aurora.json", Spec: config.ThemeSpec{Name: "aurora"}},
+	})
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+
+	m := testModelWithOptions(t, ModelOptions{
+		ThemeRegistry: registry,
+		Settings:      config.Settings{Theme: "ember"},
+	})
+	m.Width = 120
+	m.Height = 20
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+
+	initialView := m.View()
+	if !strings.Contains(initialView, " ember ") {
+		t.Fatalf("View() = %q, want ember selected", initialView)
+	}
+	if !strings.Contains(initialView, "4/6") {
+		t.Fatalf("View() = %q, want ember position", initialView)
+	}
+
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+
+	if got, want := m.Session.ThemeName, "aurora"; got != want {
+		t.Fatalf("ThemeName = %q, want %q", got, want)
+	}
+
+	externalView := m.View()
+	if !strings.Contains(externalView, " aurora ") {
+		t.Fatalf("View() = %q, want aurora selected", externalView)
+	}
+	if !strings.Contains(externalView, "6/6") {
+		t.Fatalf("View() = %q, want aurora position", externalView)
 	}
 }

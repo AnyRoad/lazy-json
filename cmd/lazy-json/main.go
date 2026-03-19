@@ -73,13 +73,15 @@ func loadModelOptionsWithResolver(resolvePaths func() (config.Paths, error)) tui
 
 func loadModelOptionsFromPaths(paths config.Paths) tui.ModelOptions {
 	options := tui.ModelOptions{
-		ThemeRegistry: tui.BuiltinThemeRegistry(),
-		Settings:      config.DefaultSettings(),
-		SettingsPath:  paths.SettingsFile,
+		ThemeRegistry:     tui.BuiltinThemeRegistry(),
+		Settings:          config.DefaultSettings(),
+		SettingsPath:      paths.SettingsFile,
+		SettingsPersisted: false,
 	}
 
-	settings, warnings := config.LoadSettings(paths.SettingsFile)
+	settings, persisted, warnings := config.LoadSettingsState(paths.SettingsFile)
 	options.Settings = settings
+	options.SettingsPersisted = persisted
 	options.Warnings = append(options.Warnings, warnings...)
 
 	discovered, warnings := config.DiscoverThemes(paths.ThemesDir)
@@ -91,6 +93,9 @@ func loadModelOptionsFromPaths(paths config.Paths) tui.ModelOptions {
 
 	options.Settings, warnings = resolveStartupSettings(options.Settings, options.ThemeRegistry)
 	options.Warnings = append(options.Warnings, warnings...)
+	if len(warnings) != 0 {
+		options.SettingsPersisted = false
+	}
 
 	return options
 }

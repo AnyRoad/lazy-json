@@ -34,6 +34,9 @@ func TestLoadModelOptionsFromPathsUsesPersistedTheme(t *testing.T) {
 	if got, want := model.SettingsPath, paths.SettingsFile; got != want {
 		t.Fatalf("SettingsPath = %q, want %q", got, want)
 	}
+	if !model.SettingsPersisted {
+		t.Fatal("SettingsPersisted = false, want true")
+	}
 	if model.Session.Status != "" {
 		t.Fatalf("Status = %q, want empty", model.Session.Status)
 	}
@@ -54,6 +57,19 @@ func TestLoadModelOptionsFromPathsFallsBackWhenConfiguredThemeMissing(t *testing
 	if !strings.Contains(model.Session.Status, `configured theme "missing-theme" not found`) {
 		t.Fatalf("Status = %q, want missing-theme warning", model.Session.Status)
 	}
+
+	model.Width = 120
+	model.Height = 20
+	updated, _ := model.Update(runeKey("S"))
+	model = updated.(*tui.Model)
+
+	view := model.View()
+	if !strings.Contains(view, "Saved theme unavailable; using "+config.DefaultThemeName) {
+		t.Fatalf("View() = %q, want fallback saved-theme message", view)
+	}
+	if !strings.Contains(view, "fallback") {
+		t.Fatalf("View() = %q, want fallback state label", view)
+	}
 }
 
 func TestLoadModelOptionsFromPathsPropagatesWarningsWithoutBlockingStartup(t *testing.T) {
@@ -73,6 +89,31 @@ func TestLoadModelOptionsFromPathsPropagatesWarningsWithoutBlockingStartup(t *te
 	}
 }
 
+func TestLoadModelOptionsFromPathsAggregatesSettingsDiscoveryAndRegistryWarnings(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	writeTestFile(t, paths.SettingsFile, []byte(`{"theme":`))
+	writeTestFile(t, filepath.Join(paths.ThemesDir, "10-broken.json"), []byte(`{"name":`))
+	writeTestFile(t, filepath.Join(paths.ThemesDir, "20-mist.json"), []byte(`{"name":"mist","key":{"foreground":"not-a-color"}}`))
+
+	model := newTestModel(t, loadModelOptionsFromPaths(paths))
+
+	if got, want := model.Session.ThemeName, config.DefaultThemeName; got != want {
+		t.Fatalf("Session.ThemeName = %q, want %q", got, want)
+	}
+	if !strings.HasPrefix(model.Session.Status, "warning: ") {
+		t.Fatalf("Status = %q, want warning prefix", model.Session.Status)
+	}
+	if !strings.Contains(model.Session.Status, "parse settings") {
+		t.Fatalf("Status = %q, want settings warning", model.Session.Status)
+	}
+	if !strings.Contains(model.Session.Status, "skip theme 10-broken.json") {
+		t.Fatalf("Status = %q, want discovery warning", model.Session.Status)
+	}
+	if !strings.Contains(model.Session.Status, `theme 20-mist.json key.foreground "not-a-color" is invalid; using default`) {
+		t.Fatalf("Status = %q, want registry warning", model.Session.Status)
+	}
+}
+
 func TestLoadModelOptionsFromPathsPropagatesSettingsWarningsWithoutBlockingStartup(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
 	writeTestFile(t, paths.SettingsFile, []byte(`{"theme":`))
@@ -87,6 +128,22 @@ func TestLoadModelOptionsFromPathsPropagatesSettingsWarningsWithoutBlockingStart
 	}
 	if !strings.Contains(model.Session.Status, "parse settings") {
 		t.Fatalf("Status = %q, want parse settings warning", model.Session.Status)
+	}
+}
+
+func TestLoadModelOptionsWarningsRemainVisibleAfterOpeningSettings(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	writeTestFile(t, paths.SettingsFile, []byte(`{"theme":`))
+
+	model := newTestModel(t, loadModelOptionsFromPaths(paths))
+	model.Width = 120
+	model.Height = 20
+
+	updated, _ := model.Update(runeKey("S"))
+	model = updated.(*tui.Model)
+
+	if view := model.View(); !strings.Contains(view, "warning: parse settings") {
+		t.Fatalf("View() = %q, want startup warning after opening settings", view)
 	}
 }
 
@@ -135,6 +192,12 @@ func TestLoadModelOptionsResolverFailureDisablesSettingsSave(t *testing.T) {
 	view := model.View()
 	if !strings.Contains(view, "Save unavailable: config path could not be resolved.") {
 		t.Fatalf("View() = %q, want disabled save hint", view)
+	}
+	if !strings.Contains(view, "Saved theme unavailable; using "+config.DefaultThemeName) {
+		t.Fatalf("View() = %q, want unavailable saved-theme message", view)
+	}
+	if !strings.Contains(view, "unavailable") {
+		t.Fatalf("View() = %q, want unavailable state label", view)
 	}
 
 	updated, _ = model.Update(runeKey("s"))

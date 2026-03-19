@@ -58,24 +58,33 @@ func (s Settings) WithDefaults() Settings {
 }
 
 func LoadSettings(path string) (Settings, []string) {
+	settings, _, warnings := loadSettings(path)
+	return settings, warnings
+}
+
+func LoadSettingsState(path string) (Settings, bool, []string) {
+	return loadSettings(path)
+}
+
+func loadSettings(path string) (Settings, bool, []string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return DefaultSettings(), nil
+			return DefaultSettings(), false, nil
 		}
-		return DefaultSettings(), []string{
+		return DefaultSettings(), false, []string{
 			fmt.Sprintf("load settings %s: %v", path, err),
 		}
 	}
 
 	var settings Settings
 	if err := json.Unmarshal(data, &settings); err != nil {
-		return DefaultSettings(), []string{
+		return DefaultSettings(), false, []string{
 			fmt.Sprintf("parse settings %s: %v", path, err),
 		}
 	}
 
-	return settings.WithDefaults(), nil
+	return settings.WithDefaults(), true, nil
 }
 
 func SaveSettings(path string, settings Settings) error {

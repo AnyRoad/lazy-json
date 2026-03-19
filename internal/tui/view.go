@@ -141,6 +141,8 @@ func (m *Model) renderFooter(theme Theme) string {
 	if m.Session.Error != "" {
 		message = m.Session.Error
 		style = theme.Error
+	} else if message == "" && m.StartupWarning != "" {
+		message = m.StartupWarning
 	}
 	left := fmt.Sprintf("[%s%s] %s", mode, dirty, sourceLabel)
 	rightParts := make([]string, 0, 2)
@@ -156,12 +158,12 @@ func (m *Model) renderFooter(theme Theme) string {
 
 func (m *Model) footerHint() string {
 	if m.settingsOpen() {
-		return "h/l preview  s save  esc close"
+		return "h/l preview  s save settings.json  esc close"
 	}
 	if m.promptKind != promptNone {
 		return ""
 	}
-	return "S settings  t preview  ? help"
+	return "S settings/save  t preview  ? help"
 }
 
 func trimWidth(s string, width int) string {

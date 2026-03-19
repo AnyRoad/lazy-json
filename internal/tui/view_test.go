@@ -20,7 +20,7 @@ func TestViewContainsKeyAndFooter(t *testing.T) {
 	if !strings.Contains(view, "sample.json") {
 		t.Fatalf("View() missing footer source: %q", view)
 	}
-	if !strings.Contains(view, "S settings") {
+	if !strings.Contains(view, "S settings/save") {
 		t.Fatalf("View() missing settings hint: %q", view)
 	}
 }
@@ -74,8 +74,9 @@ func TestViewUsesRegistryThemeForRendering(t *testing.T) {
 func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
 	m := testModelWithOptions(t, ModelOptions{
-		Settings:     config.Settings{Theme: config.DefaultThemeName},
-		SettingsPath: paths.SettingsFile,
+		Settings:          config.Settings{Theme: config.DefaultThemeName},
+		SettingsPath:      paths.SettingsFile,
+		SettingsPersisted: true,
 	})
 	m.Width = 120
 	m.Height = 20
@@ -91,8 +92,11 @@ func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	if !strings.Contains(initialView, "Saved theme: "+config.DefaultThemeName) {
 		t.Fatalf("View() = %q, want saved theme label", initialView)
 	}
-	if !strings.Contains(initialView, "h/l preview  s save  esc close") {
+	if !strings.Contains(initialView, "h/l preview  s save settings.json  esc close") {
 		t.Fatalf("View() = %q, want settings footer hint", initialView)
+	}
+	if !strings.Contains(initialView, "Save writes settings.json on demand.") {
+		t.Fatalf("View() = %q, want explicit save hint", initialView)
 	}
 
 	m.previewSettingsTheme(1)

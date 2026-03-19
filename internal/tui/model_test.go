@@ -72,6 +72,9 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 	if m.Session.ThemeName != "mist" {
 		t.Fatalf("ThemeName = %q", m.Session.ThemeName)
 	}
+	if got, want := m.Settings.Theme, "ember"; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
 }
 
 func TestCommandThemeSwitch(t *testing.T) {
@@ -94,6 +97,9 @@ func TestCommandThemeSwitch(t *testing.T) {
 	}
 	if got, want := m.Session.Status, "previewing theme mist"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if got, want := m.Settings.Theme, "ember"; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
 }
 

@@ -15,40 +15,45 @@ import (
 )
 
 type ModelOptions struct {
-	ThemeRegistry ThemeRegistry
-	Settings      config.Settings
-	SettingsPath  string
-	Warnings      []string
+	ThemeRegistry     ThemeRegistry
+	Settings          config.Settings
+	SettingsPath      string
+	SettingsPersisted bool
+	Warnings          []string
 }
 
 type Model struct {
-	Doc           *document.Document
-	Session       *session.Session
-	ThemeRegistry ThemeRegistry
-	Settings      config.Settings
-	SettingsPath  string
-	Width         int
-	Height        int
-	prompt        textinput.Model
-	promptKind    promptKind
-	lastKey       string
-	ExitOutput    []byte
-	JQRunner      integration.JQRunner
+	Doc               *document.Document
+	Session           *session.Session
+	ThemeRegistry     ThemeRegistry
+	Settings          config.Settings
+	SettingsPath      string
+	SettingsPersisted bool
+	StartupWarning    string
+	Width             int
+	Height            int
+	prompt            textinput.Model
+	promptKind        promptKind
+	lastKey           string
+	ExitOutput        []byte
+	JQRunner          integration.JQRunner
 }
 
 func NewModel(doc *document.Document, src source.Input, options ModelOptions) *Model {
 	opts := options.withDefaults()
 
 	model := &Model{
-		Doc:           doc,
-		Session:       session.New(doc, src, opts.Settings.Theme),
-		ThemeRegistry: opts.ThemeRegistry,
-		Settings:      opts.Settings,
-		SettingsPath:  opts.SettingsPath,
-		prompt:        newPrompt(),
-		promptKind:    promptNone,
+		Doc:               doc,
+		Session:           session.New(doc, src, opts.Settings.Theme),
+		ThemeRegistry:     opts.ThemeRegistry,
+		Settings:          opts.Settings,
+		SettingsPath:      opts.SettingsPath,
+		SettingsPersisted: opts.SettingsPersisted,
+		prompt:            newPrompt(),
+		promptKind:        promptNone,
 	}
 	if message := startupWarningMessage(opts.Warnings); message != "" {
+		model.StartupWarning = message
 		model.Session.SetStatus(message)
 	}
 	return model

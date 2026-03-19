@@ -40,7 +40,7 @@ func TestDiscoverThemesReadDirFailureReturnsWarning(t *testing.T) {
 
 func TestDiscoverThemesUnreadableFileReturnsWarning(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("permission-based unreadable file test is not portable on Windows")
+		t.Skip("symlink behavior is not portable on Windows")
 	}
 
 	dir := filepath.Join(t.TempDir(), ThemesDirName)
@@ -49,9 +49,8 @@ func TestDiscoverThemesUnreadableFileReturnsWarning(t *testing.T) {
 	}
 
 	path := filepath.Join(dir, "10-secret.json")
-	writeFile(t, path, []byte(`{"name":"secret"}`))
-	if err := os.Chmod(path, 0); err != nil {
-		t.Fatalf("Chmod(%q) error = %v", path, err)
+	if err := os.Symlink(filepath.Join(dir, "missing.json"), path); err != nil {
+		t.Fatalf("Symlink(%q) error = %v", path, err)
 	}
 
 	discovered, warnings := DiscoverThemes(dir)
