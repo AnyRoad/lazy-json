@@ -127,6 +127,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		theme.Muted.Render(savedLabel),
 		theme.Help.Render("h/left prev  l/right next  s save  esc close"),
 		saveHint,
+		theme.Muted.Render("Built-ins + config themes/*.json appear here."),
 	}
 
 	modalWidth := 60

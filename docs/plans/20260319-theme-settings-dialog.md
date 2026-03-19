@@ -115,12 +115,12 @@
 - Modify: `internal/tui/help_test.go`
 - Modify: `internal/tui/view_test.go`
 
-- [ ] update help text and footer hints to advertise the settings dialog, theme persistence, and external theme support
-- [ ] document the settings file path, external theme directory, theme JSON format, and explicit-save behavior in `README.md`
-- [ ] document the retained quick-switch shortcut so runtime cycling and persisted settings are both discoverable
-- [ ] write tests for updated help output and settings-related footer/view messaging
-- [ ] write tests for render hints covering modal visibility and persisted-theme messaging
-- [ ] run tests: `go test ./...`
+- [x] update help text and footer hints to advertise the settings dialog, theme persistence, and external theme support
+- [x] document the settings file path, external theme directory, theme JSON format, and explicit-save behavior in `README.md`
+- [x] document the retained quick-switch shortcut so runtime cycling and persisted settings are both discoverable
+- [x] write tests for updated help output and settings-related footer/view messaging
+- [x] write tests for render hints covering modal visibility and persisted-theme messaging
+- [x] run tests: `go test ./...`
 
 ### Task 6: Verify acceptance criteria
 

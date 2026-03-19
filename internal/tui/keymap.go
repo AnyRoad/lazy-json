@@ -14,12 +14,12 @@ Editing
   d         delete node
 
 Theme
-  t         switch to the next theme preview
+  t         quick preview next theme
   S         open theme settings dialog
   h/l       previous / next theme in settings
   s         save preview to settings.json
-  esc       close settings without saving
-  themes    built-ins + user config themes/*.json
+  persist   saved theme restores on next launch
+  themes    built-ins + config themes/*.json
 
 Commands
   :w        save
@@ -27,7 +27,7 @@ Commands
   :x        save and quit
   :print    print JSON and quit
   :q / :q!  quit / force quit
-  :theme    switch to the next theme preview
+  :theme    quick preview next theme
   :settings open theme settings dialog
   :jq EXPR  transform whole document
   :jq! EXPR transform selected subtree

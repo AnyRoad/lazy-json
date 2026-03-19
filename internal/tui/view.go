@@ -163,7 +163,7 @@ func (m *Model) footerHint() string {
 	if m.promptKind != promptNone {
 		return ""
 	}
-	return "S settings/save  t preview  ? help"
+	return "S settings/save  t quick preview  ? help"
 }
 
 func trimWidth(s string, width int) string {

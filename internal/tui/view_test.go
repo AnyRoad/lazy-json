@@ -20,7 +20,7 @@ func TestViewContainsKeyAndFooter(t *testing.T) {
 	if !strings.Contains(view, "sample.json") {
 		t.Fatalf("View() missing footer source: %q", view)
 	}
-	if !strings.Contains(view, "S settings/save") {
+	if !strings.Contains(view, "S settings/save  t quick preview  ? help") {
 		t.Fatalf("View() missing settings hint: %q", view)
 	}
 }
@@ -98,6 +98,9 @@ func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	if !strings.Contains(initialView, "Save writes settings.json on demand.") {
 		t.Fatalf("View() = %q, want explicit save hint", initialView)
 	}
+	if !strings.Contains(initialView, "Built-ins + config themes/*.json appear here.") {
+		t.Fatalf("View() = %q, want external theme hint", initialView)
+	}
 
 	m.previewSettingsTheme(1)
 	previewView := m.View()
@@ -115,5 +118,39 @@ func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	}
 	if !strings.Contains(savedView, "Saved theme: harbor") {
 		t.Fatalf("View() = %q, want updated saved theme label", savedView)
+	}
+}
+
+func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	m := testModelWithOptions(t, ModelOptions{
+		Settings:     config.Settings{Theme: config.DefaultThemeName},
+		SettingsPath: paths.SettingsFile,
+	})
+	m.Width = 120
+	m.Height = 20
+
+	updated, _ := m.Update(key("t"))
+	m = updated.(*Model)
+
+	previewView := m.View()
+	if !strings.Contains(previewView, "previewing theme harbor") {
+		t.Fatalf("View() = %q, want preview footer message", previewView)
+	}
+	if !strings.Contains(previewView, "S settings/save  t quick preview  ? help") {
+		t.Fatalf("View() = %q, want updated footer hint", previewView)
+	}
+
+	updated, _ = m.Update(key("S"))
+	m = updated.(*Model)
+	updated, _ = m.Update(key("s"))
+	m = updated.(*Model)
+
+	savedView := m.View()
+	if !strings.Contains(savedView, `saved theme "harbor"`) {
+		t.Fatalf("View() = %q, want saved footer message", savedView)
+	}
+	if !strings.Contains(savedView, "Saved theme: harbor") {
+		t.Fatalf("View() = %q, want saved theme label", savedView)
 	}
 }

@@ -71,7 +71,7 @@ File-backed sessions save back to the original path with `:w`. Stdin-backed sess
 - `l`: expand the current container, or move into the first child
 - `gg` / `G`: jump to the first or last visible row
 - `?`: open the built-in help screen
-- `t`: switch to the next theme preview
+- `t`: quick-preview the next theme for the current session
 - `S`: open the theme settings dialog
 
 ### Editing model
@@ -102,7 +102,7 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 - `:print`: print canonical JSON to stdout and quit
 - `:q`: quit if there are no unsaved changes
 - `:q!`: quit without saving
-- `:theme`: switch to the next theme preview
+- `:theme`: quick-preview the next theme without saving
 - `:settings`: open the theme settings dialog
 - `:edit-external`: same behavior as `E`
 - `:jq EXPR`: apply a `jq` expression to the whole document
@@ -110,16 +110,16 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 
 ### Theme Settings
 
-Press `S` or run `:settings` to open the theme settings dialog. Inside the dialog:
+Press `S` or run `:settings` to open the theme settings dialog. The dialog lists built-in themes first and then valid external themes discovered from your config directory. Inside the dialog:
 
 - `h` / `left`: preview the previous theme
 - `l` / `right`: preview the next theme
 - `s`: save the current preview to `settings.json`
 - `esc`: close the dialog without writing to disk
 
-Theme previews apply immediately to the current session. They are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain fast preview-only switches.
+Theme previews apply immediately to the current session. They are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches. A theme saved from the dialog is restored automatically on the next launch.
 
-`lazy-json` stores its saved theme under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.
+`lazy-json` stores its saved theme under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`. The exact base directory follows `os.UserConfigDir()` for your platform; for example, on Linux this is typically `~/.config/lazy-json/settings.json` and `~/.config/lazy-json/themes/`.
 
 External theme files are JSON objects with a required `name` plus optional style slots such as `key`, `string`, `number`, `bool`, `null`, `muted`, `selected`, `search_hit`, `status`, `error`, `border`, `help`, and `prompt`. Each slot supports `foreground`, optional `background`, and optional `bold`. For example:
 
