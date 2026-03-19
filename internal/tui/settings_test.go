@@ -1,0 +1,157 @@
+package tui
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/anyroad/lazy-json/internal/config"
+)
+
+func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	m := testModelWithOptions(t, ModelOptions{
+		Settings:     config.Settings{Theme: config.DefaultThemeName},
+		SettingsPath: paths.SettingsFile,
+	})
+	m.Width = 120
+	m.Height = 20
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+
+	if !m.settings.open {
+		t.Fatal("settings dialog is closed, want open")
+	}
+	if got, want := m.Session.Mode, "settings"; string(got) != want {
+		t.Fatalf("Mode = %q, want %q", got, want)
+	}
+	if view := m.View(); !strings.Contains(view, "Theme Settings") {
+		t.Fatalf("View() = %q, want settings overlay", view)
+	}
+
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+
+	if got, want := m.Session.ThemeName, "harbor"; got != want {
+		t.Fatalf("ThemeName = %q, want %q", got, want)
+	}
+	if got, want := m.Settings.Theme, config.DefaultThemeName; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+
+	updated, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updated.(*Model)
+
+	if m.settings.open {
+		t.Fatal("settings dialog is open, want closed")
+	}
+	if got, want := m.Session.ThemeName, "harbor"; got != want {
+		t.Fatalf("ThemeName = %q, want %q after esc", got, want)
+	}
+	if got, want := m.Session.Mode, "normal"; string(got) != want {
+		t.Fatalf("Mode = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(paths.SettingsFile); err == nil || !os.IsNotExist(err) {
+		t.Fatalf("settings file error = %v, want not-exist", err)
+	}
+}
+
+func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	m := testModelWithOptions(t, ModelOptions{
+		Settings:     config.Settings{Theme: config.DefaultThemeName},
+		SettingsPath: paths.SettingsFile,
+	})
+
+	updated, _ := m.Update(key(":"))
+	m = updated.(*Model)
+	m.prompt.SetValue("settings")
+	runCmd(t, m, m.submitPrompt())
+
+	if !m.settings.open {
+		t.Fatal("settings dialog is closed after :settings, want open")
+	}
+
+	updated, _ = m.Update(key("l"))
+	m = updated.(*Model)
+	updated, _ = m.Update(key("s"))
+	m = updated.(*Model)
+
+	if got, want := m.Session.ThemeName, "harbor"; got != want {
+		t.Fatalf("ThemeName = %q, want %q", got, want)
+	}
+	if got, want := m.Settings.Theme, "harbor"; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+	if !m.settings.open {
+		t.Fatal("settings dialog is closed after save, want open")
+	}
+	if got, want := m.Session.Status, `saved theme "harbor"`; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+
+	data, err := os.ReadFile(paths.SettingsFile)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", paths.SettingsFile, err)
+	}
+	if !strings.Contains(string(data), `"theme": "harbor"`) {
+		t.Fatalf("settings file = %q, want harbor theme", string(data))
+	}
+}
+
+func TestSettingsSaveFailureKeepsDialogOpen(t *testing.T) {
+	blockedPath := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blockedPath, []byte("blocker"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", blockedPath, err)
+	}
+
+	m := testModelWithOptions(t, ModelOptions{
+		Settings:     config.Settings{Theme: config.DefaultThemeName},
+		SettingsPath: filepath.Join(blockedPath, config.SettingsFileName),
+	})
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+	updated, _ = m.Update(key("l"))
+	m = updated.(*Model)
+	updated, _ = m.Update(key("s"))
+	m = updated.(*Model)
+
+	if !m.settings.open {
+		t.Fatal("settings dialog is closed after failed save, want open")
+	}
+	if got, want := m.Settings.Theme, config.DefaultThemeName; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+	if m.Session.Error == "" {
+		t.Fatal("Error is empty after failed save")
+	}
+}
+
+func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
+	m := testModelWithOptions(t, ModelOptions{
+		Settings: config.Settings{Theme: config.DefaultThemeName},
+	})
+	selectedBefore := m.Session.SelectedID
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+	updated, _ = m.Update(key("j"))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyLeft))
+	m = updated.(*Model)
+
+	if got, want := m.Session.SelectedID, selectedBefore; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if got, want := m.Session.ThemeName, "ember"; got != want {
+		t.Fatalf("ThemeName = %q, want %q", got, want)
+	}
+	if !m.settings.open {
+		t.Fatal("settings dialog is closed, want open")
+	}
+}

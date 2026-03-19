@@ -32,6 +32,14 @@ func (m *Model) View() string {
 	if height <= 0 {
 		height = 24
 	}
+	view := m.documentView(theme, width, height)
+	if m.settings.open {
+		return m.renderSettingsOverlay(view, theme, width, height)
+	}
+	return view
+}
+
+func (m *Model) documentView(theme Theme, width, height int) string {
 	bodyHeight := height - 2
 	if bodyHeight < 1 {
 		bodyHeight = len(m.Session.Rows)
@@ -135,11 +143,25 @@ func (m *Model) renderFooter(theme Theme) string {
 		style = theme.Error
 	}
 	left := fmt.Sprintf("[%s%s] %s", mode, dirty, sourceLabel)
-	right := message
-	if m.promptKind == promptNone {
-		right = message + "  ? help"
+	rightParts := make([]string, 0, 2)
+	if message != "" {
+		rightParts = append(rightParts, message)
 	}
+	if hint := m.footerHint(); hint != "" {
+		rightParts = append(rightParts, hint)
+	}
+	right := strings.Join(rightParts, "  ")
 	return theme.Border.Render(left) + " " + style.Render(right)
+}
+
+func (m *Model) footerHint() string {
+	if m.settings.open {
+		return "h/l preview  s save  esc close"
+	}
+	if m.promptKind != promptNone {
+		return ""
+	}
+	return "S settings  t preview  ? help"
 }
 
 func trimWidth(s string, width int) string {

@@ -34,20 +34,6 @@ type ThemeRegistry struct {
 	hasThemes bool
 }
 
-var defaultThemeRegistry = BuiltinThemeRegistry()
-
-func Themes() []Theme {
-	return defaultThemeRegistry.Themes()
-}
-
-func ThemeByName(name string) Theme {
-	return defaultThemeRegistry.ThemeByName(name)
-}
-
-func NextTheme(name string) Theme {
-	return defaultThemeRegistry.NextTheme(name)
-}
-
 func BuiltinThemeRegistry() ThemeRegistry {
 	return newThemeRegistry(builtinThemes())
 }

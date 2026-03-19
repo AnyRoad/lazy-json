@@ -20,6 +20,23 @@ func TestDiscoverThemesMissingDir(t *testing.T) {
 	}
 }
 
+func TestDiscoverThemesReadDirFailureReturnsWarning(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "themes")
+	writeFile(t, path, []byte("not a directory"))
+
+	discovered, warnings := DiscoverThemes(path)
+
+	if len(discovered) != 0 {
+		t.Fatalf("discovered = %d, want 0", len(discovered))
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want 1 warning", warnings)
+	}
+	if !strings.Contains(warnings[0], "read themes dir") {
+		t.Fatalf("warning = %q, want read themes dir warning", warnings[0])
+	}
+}
+
 func TestDiscoverThemesSortsAndSkipsInvalidEntries(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), ThemesDirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

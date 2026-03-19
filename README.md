@@ -9,7 +9,7 @@
 ## Features
 
 - tree-first navigation with `h/j/k/l`, `gg`, and `G`
-- ordered object rendering with syntax highlighting and switchable themes
+- ordered object rendering with syntax highlighting, built-in light/dark palettes, and persistent theme settings
 - collapse and expand for objects and arrays
 - substring search with `/`, `n`, and `N`
 - structured editing for scalars, object keys, object fields, and array items
@@ -71,7 +71,8 @@ File-backed sessions save back to the original path with `:w`. Stdin-backed sess
 - `l`: expand the current container, or move into the first child
 - `gg` / `G`: jump to the first or last visible row
 - `?`: open the built-in help screen
-- `t`: switch color theme
+- `t`: switch to the next theme preview
+- `S`: open the theme settings dialog
 
 ### Editing model
 
@@ -101,10 +102,39 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 - `:print`: print canonical JSON to stdout and quit
 - `:q`: quit if there are no unsaved changes
 - `:q!`: quit without saving
-- `:theme`: switch to the next theme
+- `:theme`: switch to the next theme preview
+- `:settings`: open the theme settings dialog
 - `:edit-external`: same behavior as `E`
 - `:jq EXPR`: apply a `jq` expression to the whole document
 - `:jq! EXPR`: apply a `jq` expression to the selected subtree
+
+### Theme Settings
+
+Press `S` or run `:settings` to open the theme settings dialog. Inside the dialog:
+
+- `h` / `left`: preview the previous theme
+- `l` / `right`: preview the next theme
+- `s`: save the current preview to `settings.json`
+- `esc`: close the dialog without writing to disk
+
+Theme previews apply immediately to the current session. They are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain fast preview-only switches.
+
+`lazy-json` stores its saved theme under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.
+
+External theme files are JSON objects with a required `name` plus optional style slots such as `key`, `string`, `number`, `bool`, `null`, `muted`, `selected`, `search_hit`, `status`, `error`, `border`, `help`, and `prompt`. Each slot supports `foreground`, optional `background`, and optional `bold`. For example:
+
+```json
+{
+  "name": "mist",
+  "key": {
+    "foreground": "#112233"
+  },
+  "selected": {
+    "background": "#ddeeff",
+    "bold": true
+  }
+}
+```
 
 ### Examples
 

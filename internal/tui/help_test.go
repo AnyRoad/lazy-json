@@ -11,4 +11,10 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, "Navigation") {
 		t.Fatalf("helpView() = %q", help)
 	}
+	if !strings.Contains(help, "S         open theme settings dialog") {
+		t.Fatalf("helpView() = %q, want settings shortcut", help)
+	}
+	if !strings.Contains(help, ":settings open theme settings dialog") {
+		t.Fatalf("helpView() = %q, want settings command", help)
+	}
 }

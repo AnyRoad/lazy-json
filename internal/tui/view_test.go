@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"github.com/anyroad/lazy-json/internal/config"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 func TestViewContainsKeyAndFooter(t *testing.T) {
@@ -20,9 +20,18 @@ func TestViewContainsKeyAndFooter(t *testing.T) {
 	if !strings.Contains(view, "sample.json") {
 		t.Fatalf("View() missing footer source: %q", view)
 	}
+	if !strings.Contains(view, "S settings") {
+		t.Fatalf("View() missing settings hint: %q", view)
+	}
 }
 
-func TestThemeUsesRegistryThemeForRendering(t *testing.T) {
+func TestViewUsesRegistryThemeForRendering(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(profile)
+	})
+
 	registry, warnings := NewThemeRegistry([]config.DiscoveredTheme{
 		{
 			Path: "10-mist.json",
@@ -42,11 +51,42 @@ func TestThemeUsesRegistryThemeForRendering(t *testing.T) {
 		ThemeRegistry: registry,
 		Settings:      config.Settings{Theme: "mist"},
 	})
+	m.Width = 120
+	m.Height = 20
+	m.Session.SelectedID = m.Doc.Root.Object[0].Value.ID
 
-	if got, want := m.theme().Name, "mist"; got != want {
-		t.Fatalf("theme().Name = %q, want %q", got, want)
+	mistView := m.View()
+	if want := registry.ThemeByName("mist").Key.Render("name"); !strings.Contains(mistView, want) {
+		t.Fatalf("View() = %q, want mist key styling", mistView)
 	}
-	if got, want := m.theme().Key.GetForeground(), lipgloss.Color("#112233"); got != want {
-		t.Fatalf("theme().Key.GetForeground() = %#v, want %#v", got, want)
+
+	m.Session.ThemeName = config.DefaultThemeName
+	forestView := m.View()
+
+	if mistView == forestView {
+		t.Fatalf("View() did not change after theme switch: %q", mistView)
+	}
+	if strings.Contains(forestView, registry.ThemeByName("mist").Key.Render("name")) {
+		t.Fatalf("View() = %q, unexpectedly contains mist key styling", forestView)
+	}
+}
+
+func TestViewShowsSettingsOverlayHints(t *testing.T) {
+	m := testModelWithOptions(t, ModelOptions{
+		Settings: config.Settings{Theme: config.DefaultThemeName},
+	})
+	m.Width = 120
+	m.Height = 20
+	m.openSettings()
+
+	view := m.View()
+	if !strings.Contains(view, "Theme Settings") {
+		t.Fatalf("View() = %q, want settings title", view)
+	}
+	if !strings.Contains(view, "preview only") && !strings.Contains(view, "saved") {
+		t.Fatalf("View() = %q, want settings state hint", view)
+	}
+	if !strings.Contains(view, "h/l preview  s save  esc close") {
+		t.Fatalf("View() = %q, want settings footer hint", view)
 	}
 }

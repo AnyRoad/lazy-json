@@ -13,16 +13,24 @@ Editing
   r         rename object key
   d         delete node
 
+Theme
+  t         switch to the next theme preview
+  S         open theme settings dialog
+  h/l       previous / next theme in settings
+  s         save theme setting in settings
+  esc       close settings without saving
+
 Commands
   :w        save
   :w path   save to path
   :x        save and quit
   :print    print JSON and quit
   :q / :q!  quit / force quit
+  :theme    switch to the next theme preview
+  :settings open theme settings dialog
   :jq EXPR  transform whole document
   :jq! EXPR transform selected subtree
 
 Other
-  t         switch theme
   ?         help
   q         quit`

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -64,6 +65,25 @@ func TestLoadSettingsInvalidJSONFallsBackToDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadSettingsReadFailureFallsBackToDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), SettingsFileName)
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q) error = %v", path, err)
+	}
+
+	settings, warnings := LoadSettings(path)
+
+	if settings != DefaultSettings() {
+		t.Fatalf("settings = %#v, want %#v", settings, DefaultSettings())
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want 1 warning", warnings)
+	}
+	if !strings.Contains(warnings[0], "load settings") {
+		t.Fatalf("warning = %q, want load warning", warnings[0])
+	}
+}
+
 func TestSaveAndLoadSettings(t *testing.T) {
 	paths := PathsFromUserConfigDir(t.TempDir())
 	want := Settings{Theme: "harbor"}
@@ -83,5 +103,18 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	data := string(readFile(t, paths.SettingsFile))
 	if !strings.Contains(data, "\"theme\": \"harbor\"") {
 		t.Fatalf("settings file = %q, want persisted theme", data)
+	}
+}
+
+func TestSaveSettingsReturnsCreateDirFailure(t *testing.T) {
+	blockedPath := filepath.Join(t.TempDir(), "blocked")
+	writeFile(t, blockedPath, []byte("blocker"))
+
+	err := SaveSettings(filepath.Join(blockedPath, SettingsFileName), Settings{Theme: "harbor"})
+	if err == nil {
+		t.Fatal("SaveSettings() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "create config dir") {
+		t.Fatalf("SaveSettings() error = %q, want create config dir failure", err)
 	}
 }

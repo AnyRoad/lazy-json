@@ -278,6 +278,9 @@ func (m *Model) handleCommand(command string) tea.Cmd {
 	case command == "theme":
 		m.cycleTheme()
 		return nil
+	case command == "settings":
+		m.openSettings()
+		return nil
 	case strings.HasPrefix(command, "jq! "):
 		expr := strings.TrimSpace(strings.TrimPrefix(command, "jq! "))
 		return m.applyJQ(expr, true)

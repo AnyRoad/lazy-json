@@ -17,6 +17,7 @@ import (
 type ModelOptions struct {
 	ThemeRegistry ThemeRegistry
 	Settings      config.Settings
+	SettingsPath  string
 	Warnings      []string
 }
 
@@ -25,8 +26,10 @@ type Model struct {
 	Session       *session.Session
 	ThemeRegistry ThemeRegistry
 	Settings      config.Settings
+	SettingsPath  string
 	Width         int
 	Height        int
+	settings      settingsDialog
 	prompt        textinput.Model
 	promptKind    promptKind
 	lastKey       string
@@ -34,18 +37,15 @@ type Model struct {
 	JQRunner      integration.JQRunner
 }
 
-func NewModel(doc *document.Document, src source.Input, options ...ModelOptions) *Model {
-	opts := ModelOptions{}
-	if len(options) > 0 {
-		opts = options[0]
-	}
-	opts = opts.withDefaults()
+func NewModel(doc *document.Document, src source.Input, options ModelOptions) *Model {
+	opts := options.withDefaults()
 
 	model := &Model{
 		Doc:           doc,
 		Session:       session.New(doc, src, opts.Settings.Theme),
 		ThemeRegistry: opts.ThemeRegistry,
 		Settings:      opts.Settings,
+		SettingsPath:  opts.SettingsPath,
 		prompt:        newPrompt(),
 		promptKind:    promptNone,
 	}
@@ -116,6 +116,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.settings.open {
+			return m.updateSettings(msg)
+		}
 		switch m.promptKind {
 		case promptCommand, promptSearch, promptEditScalar, promptRenameKey, promptAddObject, promptAddArray:
 			return m.updatePrompt(msg)
@@ -182,6 +185,8 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Session.NextSearchHit(true)
 	case "t":
 		m.cycleTheme()
+	case "S":
+		m.openSettings()
 	case "?":
 		m.Session.Help = true
 	case "q", "ctrl+c":
@@ -200,7 +205,7 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) cycleTheme() {
 	next := m.ThemeRegistry.NextTheme(m.Session.ThemeName)
 	m.Session.ThemeName = next.Name
-	m.Session.SetStatus("switched theme to " + next.Name)
+	m.Session.SetStatus("previewing theme " + next.Name)
 }
 
 func (m *Model) startScalarEdit() tea.Cmd {

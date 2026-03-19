@@ -12,10 +12,11 @@ import (
 type Mode string
 
 const (
-	ModeNormal  Mode = "normal"
-	ModePrompt  Mode = "prompt"
-	ModeCommand Mode = "command"
-	ModeSearch  Mode = "search"
+	ModeNormal   Mode = "normal"
+	ModePrompt   Mode = "prompt"
+	ModeCommand  Mode = "command"
+	ModeSearch   Mode = "search"
+	ModeSettings Mode = "settings"
 )
 
 type Session struct {

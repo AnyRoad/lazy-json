@@ -75,6 +75,7 @@ func loadModelOptionsFromPaths(paths config.Paths) tui.ModelOptions {
 	options := tui.ModelOptions{
 		ThemeRegistry: tui.BuiltinThemeRegistry(),
 		Settings:      config.DefaultSettings(),
+		SettingsPath:  paths.SettingsFile,
 	}
 
 	settings, warnings := config.LoadSettings(paths.SettingsFile)

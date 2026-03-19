@@ -29,6 +29,9 @@ func TestLoadModelOptionsFromPathsUsesPersistedTheme(t *testing.T) {
 	if got := model.ThemeRegistry.ThemeByName("mist").Name; got != "mist" {
 		t.Fatalf("ThemeRegistry.ThemeByName(mist).Name = %q, want mist", got)
 	}
+	if got, want := model.SettingsPath, paths.SettingsFile; got != want {
+		t.Fatalf("SettingsPath = %q, want %q", got, want)
+	}
 	if model.Session.Status != "" {
 		t.Fatalf("Status = %q, want empty", model.Session.Status)
 	}

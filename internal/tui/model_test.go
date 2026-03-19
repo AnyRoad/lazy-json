@@ -92,7 +92,7 @@ func TestCommandThemeSwitch(t *testing.T) {
 	if got, want := m.Session.ThemeName, "mist"; got != want {
 		t.Fatalf("ThemeName = %q, want %q", got, want)
 	}
-	if got, want := m.Session.Status, "switched theme to mist"; got != want {
+	if got, want := m.Session.Status, "previewing theme mist"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
 	}
 }
