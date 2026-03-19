@@ -158,8 +158,27 @@ func TestLoadModelOptionsFromPathsKeepsDefaultStartupWithoutConfig(t *testing.T)
 	if got, want := model.Session.ThemeName, config.DefaultThemeName; got != want {
 		t.Fatalf("Session.ThemeName = %q, want %q", got, want)
 	}
+	if model.SettingsFilePresent {
+		t.Fatal("SettingsFilePresent = true, want false without settings.json")
+	}
 	if model.Session.Status != "" {
 		t.Fatalf("Status = %q, want empty", model.Session.Status)
+	}
+
+	model.Width = 120
+	model.Height = 20
+	updated, _ := model.Update(runeKey("S"))
+	model = updated.(*tui.Model)
+
+	view := model.View()
+	if !strings.Contains(view, "Saved theme: none yet (using "+config.DefaultThemeName+")") {
+		t.Fatalf("View() = %q, want not-saved label", view)
+	}
+	if !strings.Contains(view, "not saved") {
+		t.Fatalf("View() = %q, want not-saved state", view)
+	}
+	if strings.Contains(view, "Saved theme unavailable; using "+config.DefaultThemeName) {
+		t.Fatalf("View() = %q, unexpectedly shows fallback warning on first run", view)
 	}
 }
 
@@ -193,7 +212,7 @@ func TestLoadModelOptionsResolverFailureDisablesSettingsSave(t *testing.T) {
 	if !strings.Contains(view, "Save unavailable: config path could not be resolved.") {
 		t.Fatalf("View() = %q, want disabled save hint", view)
 	}
-	if !strings.Contains(view, "Saved theme unavailable; using "+config.DefaultThemeName) {
+	if !strings.Contains(view, "Settings file unavailable; using "+config.DefaultThemeName) {
 		t.Fatalf("View() = %q, want unavailable saved-theme message", view)
 	}
 	if !strings.Contains(view, "unavailable") {

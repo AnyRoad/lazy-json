@@ -20,7 +20,7 @@ func TestViewContainsKeyAndFooter(t *testing.T) {
 	if !strings.Contains(view, "sample.json") {
 		t.Fatalf("View() missing footer source: %q", view)
 	}
-	if !strings.Contains(view, "S settings/save  t quick preview  ? help") {
+	if !strings.Contains(view, "S open settings  t quick preview  ? help") {
 		t.Fatalf("View() missing settings hint: %q", view)
 	}
 }
@@ -137,7 +137,7 @@ func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 	if !strings.Contains(previewView, "previewing theme harbor") {
 		t.Fatalf("View() = %q, want preview footer message", previewView)
 	}
-	if !strings.Contains(previewView, "S settings/save  t quick preview  ? help") {
+	if !strings.Contains(previewView, "S open settings  t quick preview  ? help") {
 		t.Fatalf("View() = %q, want updated footer hint", previewView)
 	}
 
