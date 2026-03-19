@@ -42,6 +42,41 @@ func TestLoadModelOptionsFromPathsUsesPersistedTheme(t *testing.T) {
 	}
 }
 
+func TestLoadModelOptionsFromPathsRestoresThemeAfterModalSaveAndRestart(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+
+	model := newTestModel(t, loadModelOptionsFromPaths(paths))
+
+	updated, _ := model.Update(runeKey("S"))
+	model = updated.(*tui.Model)
+	updated, _ = model.Update(runeKey("l"))
+	model = updated.(*tui.Model)
+	updated, _ = model.Update(runeKey("s"))
+	model = updated.(*tui.Model)
+
+	if got, want := model.Settings.Theme, "harbor"; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q after save", got, want)
+	}
+	if !model.SettingsPersisted {
+		t.Fatal("SettingsPersisted = false, want true after save")
+	}
+
+	restarted := newTestModel(t, loadModelOptionsFromPaths(paths))
+
+	if got, want := restarted.Settings.Theme, "harbor"; got != want {
+		t.Fatalf("restarted Settings.Theme = %q, want %q", got, want)
+	}
+	if got, want := restarted.Session.ThemeName, "harbor"; got != want {
+		t.Fatalf("restarted Session.ThemeName = %q, want %q", got, want)
+	}
+	if !restarted.SettingsPersisted {
+		t.Fatal("restarted SettingsPersisted = false, want true")
+	}
+	if restarted.Session.Status != "" {
+		t.Fatalf("restarted Status = %q, want empty", restarted.Session.Status)
+	}
+}
+
 func TestLoadModelOptionsFromPathsFallsBackWhenConfiguredThemeMissing(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
 	writeTestFile(t, paths.SettingsFile, []byte("{\n  \"theme\": \"missing-theme\"\n}\n"))

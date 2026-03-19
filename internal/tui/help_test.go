@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -31,5 +32,29 @@ func TestHelpView(t *testing.T) {
 	}
 	if !strings.Contains(help, ":settings open theme settings dialog") {
 		t.Fatalf("helpView() = %q, want settings command", help)
+	}
+}
+
+func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
+	data, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatalf("ReadFile(README.md) error = %v", err)
+	}
+
+	readme := string(data)
+	snippets := []string{
+		"- `t`: quick-preview the next theme for the current session",
+		"- `S`: open the theme settings dialog",
+		"- `:theme`: quick-preview the next theme without saving",
+		"- `:settings`: open the theme settings dialog",
+		"- `s`: save the current preview to `settings.json`",
+		"`lazy-json` stores its saved theme under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.",
+		"They are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.",
+	}
+
+	for _, snippet := range snippets {
+		if !strings.Contains(readme, snippet) {
+			t.Fatalf("README.md missing %q", snippet)
+		}
 	}
 }
