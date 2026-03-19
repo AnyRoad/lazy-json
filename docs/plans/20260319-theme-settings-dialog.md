@@ -99,13 +99,13 @@
 - Modify: `internal/tui/commands.go`
 - Modify: `internal/tui/keymap.go`
 
-- [ ] add modal state and rendering for a compact settings overlay that sits above the existing document view
-- [ ] implement `S` and `:settings` to open the modal, with modal-local navigation for the theme row
-- [ ] preview theme changes immediately in the current session while keeping persistence explicit through a save action
-- [ ] implement modal save behavior that writes `settings.json`, keeps the modal open on failure, and reports concrete status/error messages
-- [ ] write tests for modal open/close, theme preview, successful save, and `:settings` command entry
-- [ ] write tests for save failures, escape behavior without persistence, and modal key handling edge cases
-- [ ] run tests: `go test ./...`
+- [x] add modal state and rendering for a compact settings overlay that sits above the existing document view
+- [x] implement `S` and `:settings` to open the modal, with modal-local navigation for the theme row
+- [x] preview theme changes immediately in the current session while keeping persistence explicit through a save action
+- [x] implement modal save behavior that writes `settings.json`, keeps the modal open on failure, and reports concrete status/error messages
+- [x] write tests for modal open/close, theme preview, successful save, and `:settings` command entry
+- [x] write tests for save failures, escape behavior without persistence, and modal key handling edge cases
+- [x] run tests: `go test ./...`
 
 ### Task 5: Update help text, footer hints, and user documentation
 
