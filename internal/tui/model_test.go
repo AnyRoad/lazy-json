@@ -74,6 +74,29 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 	}
 }
 
+func TestCommandThemeSwitch(t *testing.T) {
+	registry, warnings := NewThemeRegistry([]config.DiscoveredTheme{
+		{Path: "10-mist.json", Spec: config.ThemeSpec{Name: "mist"}},
+	})
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+
+	m := testModelWithOptions(t, ModelOptions{
+		ThemeRegistry: registry,
+		Settings:      config.Settings{Theme: "ember"},
+	})
+
+	runCmd(t, m, m.handleCommand("theme"))
+
+	if got, want := m.Session.ThemeName, "mist"; got != want {
+		t.Fatalf("ThemeName = %q, want %q", got, want)
+	}
+	if got, want := m.Session.Status, "switched theme to mist"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+}
+
 func TestHelpToggle(t *testing.T) {
 	m := testModel(t)
 	updated, _ := m.Update(key("?"))

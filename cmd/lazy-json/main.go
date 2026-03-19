@@ -58,7 +58,11 @@ func run(args []string) error {
 }
 
 func loadModelOptions() tui.ModelOptions {
-	paths, err := config.ResolvePaths()
+	return loadModelOptionsWithResolver(config.ResolvePaths)
+}
+
+func loadModelOptionsWithResolver(resolvePaths func() (config.Paths, error)) tui.ModelOptions {
+	paths, err := resolvePaths()
 	if err != nil {
 		return tui.ModelOptions{
 			Warnings: []string{fmt.Sprintf("resolve config paths: %v", err)},

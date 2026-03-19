@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,6 +68,23 @@ func TestLoadModelOptionsFromPathsPropagatesWarningsWithoutBlockingStartup(t *te
 	}
 }
 
+func TestLoadModelOptionsFromPathsPropagatesSettingsWarningsWithoutBlockingStartup(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	writeTestFile(t, paths.SettingsFile, []byte(`{"theme":`))
+
+	model := newTestModel(t, loadModelOptionsFromPaths(paths))
+
+	if got, want := model.Settings.Theme, config.DefaultThemeName; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+	if got, want := model.Session.ThemeName, config.DefaultThemeName; got != want {
+		t.Fatalf("Session.ThemeName = %q, want %q", got, want)
+	}
+	if !strings.Contains(model.Session.Status, "parse settings") {
+		t.Fatalf("Status = %q, want parse settings warning", model.Session.Status)
+	}
+}
+
 func TestLoadModelOptionsFromPathsKeepsDefaultStartupWithoutConfig(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
 
@@ -80,6 +98,22 @@ func TestLoadModelOptionsFromPathsKeepsDefaultStartupWithoutConfig(t *testing.T)
 	}
 	if model.Session.Status != "" {
 		t.Fatalf("Status = %q, want empty", model.Session.Status)
+	}
+}
+
+func TestLoadModelOptionsWarnsWhenConfigPathsCannotBeResolved(t *testing.T) {
+	model := newTestModel(t, loadModelOptionsWithResolver(func() (config.Paths, error) {
+		return config.Paths{}, errors.New("boom")
+	}))
+
+	if got, want := model.Settings.Theme, config.DefaultThemeName; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+	if got, want := model.Session.ThemeName, config.DefaultThemeName; got != want {
+		t.Fatalf("Session.ThemeName = %q, want %q", got, want)
+	}
+	if !strings.Contains(model.Session.Status, "resolve config paths: boom") {
+		t.Fatalf("Status = %q, want resolve config paths warning", model.Session.Status)
 	}
 }
 
