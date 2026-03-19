@@ -218,6 +218,15 @@ func TestLoadModelOptionsResolverFailureDisablesSettingsSave(t *testing.T) {
 	if !strings.Contains(view, "unavailable") {
 		t.Fatalf("View() = %q, want unavailable state label", view)
 	}
+	if !strings.Contains(view, "h/left prev  l/right next  s unavailable  esc close") {
+		t.Fatalf("View() = %q, want unavailable modal controls", view)
+	}
+	if !strings.Contains(view, "h/l preview  s unavailable  esc close") {
+		t.Fatalf("View() = %q, want unavailable footer hint", view)
+	}
+	if strings.Contains(view, "h/l preview  s save settings.json  esc close") {
+		t.Fatalf("View() = %q, unexpectedly advertises save shortcut when unavailable", view)
+	}
 
 	updated, _ = model.Update(runeKey("s"))
 	model = updated.(*tui.Model)

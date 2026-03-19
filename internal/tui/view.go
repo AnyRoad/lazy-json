@@ -158,7 +158,7 @@ func (m *Model) renderFooter(theme Theme) string {
 
 func (m *Model) footerHint() string {
 	if m.settingsOpen() {
-		return "h/l preview  s save settings.json  esc close"
+		return m.settingsFooterHint()
 	}
 	if m.promptKind != promptNone {
 		return ""

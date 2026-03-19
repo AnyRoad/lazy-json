@@ -64,7 +64,7 @@ func (m *Model) previewSettingsTheme(step int) {
 }
 
 func (m *Model) saveThemeSettings() {
-	if strings.TrimSpace(m.SettingsPath) == "" {
+	if !m.settingsSaveAvailable() {
 		m.Session.SetError("settings path unavailable; could not resolve user config dir")
 		return
 	}
@@ -80,6 +80,24 @@ func (m *Model) saveThemeSettings() {
 	m.SettingsFilePresent = true
 	m.SettingsPersisted = true
 	m.Session.SetStatus(fmt.Sprintf("saved theme %q", m.Settings.Theme))
+}
+
+func (m *Model) settingsSaveAvailable() bool {
+	return strings.TrimSpace(m.SettingsPath) != ""
+}
+
+func (m *Model) settingsDialogHint() string {
+	if m.settingsSaveAvailable() {
+		return "h/left prev  l/right next  s save  esc close"
+	}
+	return "h/left prev  l/right next  s unavailable  esc close"
+}
+
+func (m *Model) settingsFooterHint() string {
+	if m.settingsSaveAvailable() {
+		return "h/l preview  s save settings.json  esc close"
+	}
+	return "h/l preview  s unavailable  esc close"
 }
 
 func (m *Model) settingsThemeIndex(themes []Theme, current string) int {
@@ -106,7 +124,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 	stateLabel := theme.Muted.Render("saved")
 	savedLabel := "Saved theme: " + savedTheme
 	switch {
-	case strings.TrimSpace(m.SettingsPath) == "":
+	case !m.settingsSaveAvailable():
 		stateLabel = theme.Error.Render("unavailable")
 		savedLabel = "Settings file unavailable; using " + savedTheme
 	case !m.SettingsPersisted && !m.SettingsFilePresent:
@@ -121,7 +139,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 	}
 
 	saveHint := theme.Muted.Render("Save writes settings.json on demand.")
-	if strings.TrimSpace(m.SettingsPath) == "" {
+	if !m.settingsSaveAvailable() {
 		saveHint = theme.Error.Render("Save unavailable: config path could not be resolved.")
 	}
 
@@ -130,7 +148,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		"",
 		theme.Key.Render("Theme") + " " + theme.Selected.Render(" "+currentTheme+" ") + " " + theme.Muted.Render(position) + " " + stateLabel,
 		theme.Muted.Render(savedLabel),
-		theme.Help.Render("h/left prev  l/right next  s save  esc close"),
+		theme.Help.Render(m.settingsDialogHint()),
 		saveHint,
 		theme.Muted.Render("Built-ins + config themes/*.json appear here."),
 	}
