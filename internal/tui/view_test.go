@@ -154,3 +154,20 @@ func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 		t.Fatalf("View() = %q, want saved theme label", savedView)
 	}
 }
+
+func TestViewShowsPendingPrefixHint(t *testing.T) {
+	m := testModel(t)
+	m.Width = 120
+	m.Height = 20
+
+	updated, _ := m.Update(key("y"))
+	m = updated.(*Model)
+
+	view := m.View()
+	if !strings.Contains(view, "pending: y") {
+		t.Fatalf("View() = %q, want pending prefix hint", view)
+	}
+	if strings.Contains(view, "S open settings  t quick preview  ? help") {
+		t.Fatalf("View() = %q, unexpectedly shows default footer hint while prefix is pending", view)
+	}
+}

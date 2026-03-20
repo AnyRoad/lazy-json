@@ -21,6 +21,7 @@ type ModelOptions struct {
 	SettingsFilePresent bool
 	SettingsPersisted   bool
 	Warnings            []string
+	Clipboard           integration.Clipboard
 }
 
 type Model struct {
@@ -36,9 +37,10 @@ type Model struct {
 	Height              int
 	prompt              textinput.Model
 	promptKind          promptKind
-	lastKey             string
+	pendingPrefix       string
 	ExitOutput          []byte
 	JQRunner            integration.JQRunner
+	Clipboard           integration.Clipboard
 }
 
 func NewModel(doc *document.Document, src source.Input, options ModelOptions) *Model {
@@ -54,6 +56,7 @@ func NewModel(doc *document.Document, src source.Input, options ModelOptions) *M
 		SettingsPersisted:   opts.SettingsPersisted,
 		prompt:              newPrompt(),
 		promptKind:          promptNone,
+		Clipboard:           opts.Clipboard,
 	}
 	if message := startupWarningMessage(opts.Warnings); message != "" {
 		model.StartupWarning = message
@@ -68,6 +71,9 @@ func (o ModelOptions) withDefaults() ModelOptions {
 	}
 	o.Settings = o.Settings.WithDefaults()
 	o.Settings.Theme = o.ThemeRegistry.ThemeByName(o.Settings.Theme).Name
+	if o.Clipboard == nil {
+		o.Clipboard = integration.SystemClipboard{}
+	}
 	return o
 }
 
@@ -151,7 +157,27 @@ func (m *Model) updatePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.Session.ClearMessages()
-	switch msg.String() {
+	key := msg.String()
+	if key == "ctrl+c" {
+		m.clearPendingPrefix()
+		if m.Session.Dirty {
+			m.Session.SetError("unsaved changes; use :x, :w, or :q!")
+			return m, nil
+		}
+		return m, tea.Quit
+	}
+	if key == "esc" && m.pendingPrefix != "" {
+		m.clearPendingPrefix()
+		return m, nil
+	}
+	if m.pendingPrefix != "" {
+		return m.resolvePendingPrefix(key)
+	}
+	return m.handleNormalKey(key)
+}
+
+func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
 	case "j", "down":
 		m.Session.Move(1)
 	case "k", "up":
@@ -164,13 +190,8 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.refresh()
 	case "G":
 		m.Session.MoveToBottom()
-	case "g":
-		if m.lastKey == "g" {
-			m.Session.MoveToTop()
-			m.lastKey = ""
-			return m, nil
-		}
-		m.lastKey = "g"
+	case "g", "y", "z", "]":
+		m.pendingPrefix = key
 		return m, nil
 	case "/":
 		m.openPrompt(promptSearch, "/ ", m.Session.Search.Query)
@@ -195,6 +216,7 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		m.openSettings()
 	case "?":
+		m.clearPendingPrefix()
 		m.Session.Help = true
 	case "q", "ctrl+c":
 		if m.Session.Dirty {
@@ -203,10 +225,51 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 	}
-	if msg.String() != "g" {
-		m.lastKey = ""
-	}
 	return m, nil
+}
+
+func (m *Model) resolvePendingPrefix(key string) (tea.Model, tea.Cmd) {
+	prefix := m.pendingPrefix
+	m.clearPendingPrefix()
+
+	switch prefix {
+	case "g":
+		if key == "g" {
+			m.Session.MoveToTop()
+			return m, nil
+		}
+	case "y":
+		switch key {
+		case "p":
+			return m, m.copyPath()
+		case "k":
+			return m, m.copyKey()
+		case "v":
+			return m, m.copyValue()
+		case "s":
+			return m, m.copySubtree()
+		case "j":
+			return m, m.copyDocument()
+		}
+	case "z":
+		switch key {
+		case "R":
+			return m, m.expandAll()
+		case "M":
+			return m, m.collapseAll()
+		}
+	case "]":
+		if key == "p" {
+			return m, m.nextParentSibling()
+		}
+	}
+
+	m.Session.SetError("unknown shortcut: " + prefix + key)
+	return m, nil
+}
+
+func (m *Model) clearPendingPrefix() {
+	m.pendingPrefix = ""
 }
 
 func (m *Model) cycleTheme() {

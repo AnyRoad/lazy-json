@@ -163,6 +163,9 @@ func (m *Model) footerHint() string {
 	if m.promptKind != promptNone {
 		return ""
 	}
+	if m.pendingPrefix != "" {
+		return "pending: " + m.pendingPrefix
+	}
 	return "S open settings  t quick preview  ? help"
 }
 

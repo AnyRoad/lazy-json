@@ -46,6 +46,7 @@ func (m *Model) currentContainerTarget() (*document.Node, error) {
 }
 
 func (m *Model) openPrompt(kind promptKind, placeholder, initial string) {
+	m.clearPendingPrefix()
 	m.promptKind = kind
 	m.prompt = newPrompt()
 	m.prompt.Prompt = placeholder
@@ -62,6 +63,7 @@ func (m *Model) openPrompt(kind promptKind, placeholder, initial string) {
 }
 
 func (m *Model) closePrompt() {
+	m.clearPendingPrefix()
 	m.promptKind = promptNone
 	m.prompt.Blur()
 	m.Session.Mode = "normal"
@@ -213,6 +215,101 @@ func (m *Model) save(path string) error {
 	return nil
 }
 
+func trimClipboardJSON(data []byte) string {
+	return strings.TrimSuffix(string(data), "\n")
+}
+
+func (m *Model) copyClipboardText(label, text string) tea.Cmd {
+	if err := m.Clipboard.WriteAll(text); err != nil {
+		m.Session.SetError("could not copy to clipboard: " + err.Error())
+		return nil
+	}
+	m.Session.SetStatus("copied " + label + " to clipboard")
+	return nil
+}
+
+func (m *Model) copyPath() tea.Cmd {
+	row, ok := m.Session.CurrentRow()
+	if !ok {
+		m.Session.SetError("selected row not found")
+		return nil
+	}
+	return m.copyClipboardText("path", row.Path)
+}
+
+func (m *Model) copyKey() tea.Cmd {
+	loc, ok := m.Doc.Find(m.Session.SelectedID)
+	if !ok {
+		m.Session.SetError("selected node not found")
+		return nil
+	}
+	if loc.Parent == nil || loc.ParentKind != document.KindObject {
+		m.Session.SetError("selected node does not have an object key")
+		return nil
+	}
+	return m.copyClipboardText("key", loc.Key)
+}
+
+func (m *Model) copyValue() tea.Cmd {
+	node, err := m.selectedNode()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	data, err := document.MarshalCompactNode(node)
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	return m.copyClipboardText("value", string(data))
+}
+
+func (m *Model) copySubtree() tea.Cmd {
+	node, err := m.selectedNode()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	data, err := document.MarshalIndentNode(node)
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	return m.copyClipboardText("subtree", trimClipboardJSON(data))
+}
+
+func (m *Model) copyDocument() tea.Cmd {
+	data, err := m.Doc.MarshalIndent()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	return m.copyClipboardText("document", trimClipboardJSON(data))
+}
+
+func (m *Model) expandAll() tea.Cmd {
+	m.Session.ExpandAll(m.Doc)
+	m.refresh()
+	m.Session.SetStatus("expanded all nodes")
+	return nil
+}
+
+func (m *Model) collapseAll() tea.Cmd {
+	m.Session.CollapseAll(m.Doc)
+	m.refresh()
+	m.Session.SetStatus("collapsed all nodes")
+	return nil
+}
+
+func (m *Model) nextParentSibling() tea.Cmd {
+	if !m.Session.NextParentSibling(m.Doc) {
+		m.Session.SetError("no next parent sibling")
+		return nil
+	}
+	m.Session.SetStatus("moved to next parent sibling")
+	return nil
+}
+
 func (m *Model) saveAndQuit(path string) tea.Cmd {
 	if path == "" && m.Session.SourceKind == source.KindStdin && m.Session.SourcePath == "" {
 		data, err := m.Doc.MarshalIndent()
@@ -281,6 +378,22 @@ func (m *Model) handleCommand(command string) tea.Cmd {
 	case command == "settings":
 		m.openSettings()
 		return nil
+	case command == "copy-path":
+		return m.copyPath()
+	case command == "copy-key":
+		return m.copyKey()
+	case command == "copy-value":
+		return m.copyValue()
+	case command == "copy-subtree":
+		return m.copySubtree()
+	case command == "copy-json":
+		return m.copyDocument()
+	case command == "expand-all":
+		return m.expandAll()
+	case command == "collapse-all":
+		return m.collapseAll()
+	case command == "next-parent-sibling":
+		return m.nextParentSibling()
 	case strings.HasPrefix(command, "jq! "):
 		expr := strings.TrimSpace(strings.TrimPrefix(command, "jq! "))
 		return m.applyJQ(expr, true)

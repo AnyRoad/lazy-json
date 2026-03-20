@@ -17,7 +17,7 @@ func (m *Model) settingsOpen() bool {
 
 func (m *Model) openSettings() {
 	m.Session.Mode = session.ModeSettings
-	m.lastKey = ""
+	m.clearPendingPrefix()
 }
 
 func (m *Model) closeSettings() {

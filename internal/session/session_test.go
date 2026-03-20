@@ -16,6 +16,15 @@ func testDoc(t *testing.T) *document.Document {
 	return doc
 }
 
+func testDocWithSiblingBranches(t *testing.T) *document.Document {
+	t.Helper()
+	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2},"tail":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
 func TestRefreshAndPaths(t *testing.T) {
 	doc := testDoc(t)
 	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
@@ -68,5 +77,58 @@ func TestSearchHits(t *testing.T) {
 	s.NextSearchHit(false)
 	if s.SelectedID != s.SearchHits[0] {
 		t.Fatalf("SelectedID = %d, want %d", s.SelectedID, s.SearchHits[0])
+	}
+}
+
+func TestExpandAllAndCollapseAll(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+
+	s.ExpandAll(doc)
+	s.Refresh(doc)
+	if got, want := len(s.Rows), 7; got != want {
+		t.Fatalf("rows = %d, want %d after ExpandAll", got, want)
+	}
+
+	titleID := doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+	s.SelectedID = titleID
+	s.CollapseAll(doc)
+	s.Refresh(doc)
+
+	if got, want := len(s.Rows), 3; got != want {
+		t.Fatalf("rows = %d, want %d after CollapseAll", got, want)
+	}
+	if got, want := s.SelectedID, doc.Root.Object[1].Value.ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after CollapseAll", got, want)
+	}
+}
+
+func TestNextParentSiblingClimbsAncestors(t *testing.T) {
+	doc := testDocWithSiblingBranches(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	s.ExpandAll(doc)
+	s.Refresh(doc)
+
+	titleID := doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+	s.SelectedID = titleID
+	if !s.NextParentSibling(doc) {
+		t.Fatal("NextParentSibling() = false, want true for immediate parent sibling")
+	}
+	if got, want := s.SelectedID, doc.Root.Object[1].Value.Array[1].ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+
+	lastTitleID := doc.Root.Object[1].Value.Array[1].Object[0].Value.ID
+	s.SelectedID = lastTitleID
+	if !s.NextParentSibling(doc) {
+		t.Fatal("NextParentSibling() = false, want true for ancestor climb")
+	}
+	if got, want := s.SelectedID, doc.Root.Object[2].Value.ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after climb", got, want)
+	}
+
+	s.SelectedID = doc.Root.Object[3].Value.ID
+	if s.NextParentSibling(doc) {
+		t.Fatal("NextParentSibling() = true, want false at end of document")
 	}
 }

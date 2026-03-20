@@ -9,6 +9,7 @@
 ## Features
 
 - tree-first navigation with `h/j/k/l`, `gg`, and `G`
+- prefix shortcuts for clipboard actions, structural jumps, and tree-wide expand/collapse
 - ordered object rendering with syntax highlighting, built-in light/dark palettes, and persistent theme settings
 - collapse and expand for objects and arrays
 - substring search with `/`, `n`, and `N`
@@ -70,6 +71,8 @@ File-backed sessions save back to the original path with `:w`. Stdin-backed sess
 - `h`: collapse the current container, or move to the parent row
 - `l`: expand the current container, or move into the first child
 - `gg` / `G`: jump to the first or last visible row
+- `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found
+- `zR` / `zM`: expand all containers / collapse all containers except the root
 - `?`: open the built-in help screen
 - `t`: quick-preview the next theme for the current session
 - `S`: open the theme settings dialog
@@ -85,6 +88,16 @@ The editor is structured, not freeform. You operate on the selected node:
 - `E`: serialize the selected node or subtree into a temp file, open it in `$EDITOR`, and replace the node only if the edited JSON parses successfully
 
 This keeps edits valid and avoids the complexity of embedding a full text editor into the TUI.
+
+### Clipboard
+
+- `yp`: copy the selected JSON path
+- `yk`: copy the selected object key
+- `yv`: copy the selected value as compact JSON
+- `ys`: copy the selected subtree as pretty JSON
+- `yj`: copy the whole document as pretty JSON
+
+All clipboard copies use structured JSON output rather than the rendered screen text. `yv` preserves valid JSON scalars and compact containers, while `ys` and `yj` use the same canonical pretty formatting as saves.
 
 ### Search
 
@@ -104,6 +117,14 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 - `:q!`: quit without saving
 - `:theme`: quick-preview the next theme without saving
 - `:settings`: open the theme settings dialog
+- `:copy-path`: copy the selected JSON path
+- `:copy-key`: copy the selected object key
+- `:copy-value`: copy the selected value as compact JSON
+- `:copy-subtree`: copy the selected subtree as pretty JSON
+- `:copy-json`: copy the whole document as pretty JSON
+- `:expand-all`: expand every object and array in the document
+- `:collapse-all`: collapse every container except the root
+- `:next-parent-sibling`: jump to the next sibling of the selected node's parent, climbing ancestors as needed
 - `:edit-external`: same behavior as `E`
 - `:jq EXPR`: apply a `jq` expression to the whole document
 - `:jq! EXPR`: apply a `jq` expression to the selected subtree

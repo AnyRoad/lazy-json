@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,11 +18,36 @@ func testModel(t *testing.T) *Model {
 
 func testModelWithOptions(t *testing.T, options ModelOptions) *Model {
 	t.Helper()
+	if options.Clipboard == nil {
+		options.Clipboard = &stubClipboard{}
+	}
 	doc, err := document.Parse([]byte(`{"name":"Ada","items":[1,2]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, options)
+}
+
+type stubClipboard struct {
+	writes []string
+	err    error
+}
+
+func (c *stubClipboard) WriteAll(text string) error {
+	if c.err != nil {
+		return c.err
+	}
+	c.writes = append(c.writes, text)
+	return nil
+}
+
+func clipboardForModel(t *testing.T, m *Model) *stubClipboard {
+	t.Helper()
+	clipboard, ok := m.Clipboard.(*stubClipboard)
+	if !ok {
+		t.Fatalf("Clipboard = %T, want *stubClipboard", m.Clipboard)
+	}
+	return clipboard
 }
 
 func key(s string) tea.KeyMsg {
@@ -189,5 +215,158 @@ func TestPromptEscapes(t *testing.T) {
 	m = updated.(*Model)
 	if m.promptKind != promptNone {
 		t.Fatalf("promptKind = %q", m.promptKind)
+	}
+}
+
+func TestCopyShortcutAndCommandAliases(t *testing.T) {
+	clipboard := &stubClipboard{}
+	m := testModelWithOptions(t, ModelOptions{Clipboard: clipboard})
+	m.Session.SelectedID = m.Doc.Root.Object[0].Value.ID
+
+	updated, cmd := m.Update(key("y"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := m.pendingPrefix, "y"; got != want {
+		t.Fatalf("pendingPrefix = %q, want %q", got, want)
+	}
+
+	updated, cmd = m.Update(key("p"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := clipboard.writes[len(clipboard.writes)-1], "$.name"; got != want {
+		t.Fatalf("clipboard write = %q, want %q", got, want)
+	}
+	if got, want := m.Session.Status, "copied path to clipboard"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if m.pendingPrefix != "" {
+		t.Fatalf("pendingPrefix = %q, want empty", m.pendingPrefix)
+	}
+
+	runCmd(t, m, m.handleCommand("copy-value"))
+	if got, want := clipboard.writes[len(clipboard.writes)-1], `"Ada"`; got != want {
+		t.Fatalf("clipboard write = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.handleCommand("copy-json"))
+	if got, want := clipboard.writes[len(clipboard.writes)-1], "{\n  \"name\": \"Ada\",\n  \"items\": [\n    1,\n    2\n  ]\n}"; got != want {
+		t.Fatalf("clipboard write = %q, want %q", got, want)
+	}
+}
+
+func TestCopyKeyShortcutRequiresObjectKey(t *testing.T) {
+	m := testModel(t)
+	m.Session.SelectedID = m.Doc.Root.Object[0].Value.ID
+
+	updated, cmd := m.Update(key("y"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+
+	updated, cmd = m.Update(key("k"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+
+	if got, want := m.Session.Status, "copied key to clipboard"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+
+	m.Session.SelectedID = m.Doc.Root.ID
+	runCmd(t, m, m.handleCommand("copy-key"))
+	if got, want := m.Session.Error, "selected node does not have an object key"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+}
+
+func TestCopySubtreeAndClipboardFailure(t *testing.T) {
+	clipboard := &stubClipboard{err: errors.New("clipboard offline")}
+	m := testModelWithOptions(t, ModelOptions{Clipboard: clipboard})
+	m.Session.SelectedID = m.Doc.Root.Object[0].Value.ID
+
+	runCmd(t, m, m.handleCommand("copy-subtree"))
+	if got, want := m.Session.Error, "could not copy to clipboard: clipboard offline"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	clipboard.err = nil
+	runCmd(t, m, m.handleCommand("copy-subtree"))
+	if got, want := clipboard.writes[len(clipboard.writes)-1], `"Ada"`; got != want {
+		t.Fatalf("clipboard write = %q, want %q", got, want)
+	}
+}
+
+func TestPrefixErrorsAndEscape(t *testing.T) {
+	m := testModel(t)
+
+	updated, cmd := m.Update(key("y"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+
+	updated, cmd = m.Update(key("x"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := m.Session.Error, "unknown shortcut: yx"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+	if m.pendingPrefix != "" {
+		t.Fatalf("pendingPrefix = %q, want empty", m.pendingPrefix)
+	}
+
+	updated, cmd = m.Update(key("z"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	updated, cmd = m.Update(specialKey(tea.KeyEsc))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if m.pendingPrefix != "" {
+		t.Fatalf("pendingPrefix = %q, want empty after esc", m.pendingPrefix)
+	}
+	if m.Session.Error != "" {
+		t.Fatalf("Error = %q, want empty after esc", m.Session.Error)
+	}
+}
+
+func TestExpandCollapseAndNextParentSiblingCommands(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2},"tail":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+
+	runCmd(t, m, m.handleCommand("expand-all"))
+	if got, want := len(m.Session.Rows), 10; got != want {
+		t.Fatalf("rows = %d, want %d after expand-all", got, want)
+	}
+
+	titleID := doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+	m.Session.SelectedID = titleID
+	runCmd(t, m, m.handleCommand("next-parent-sibling"))
+	if got, want := m.Session.SelectedID, doc.Root.Object[1].Value.Array[1].ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if got, want := m.Session.Status, "moved to next parent sibling"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+
+	lastBranchTitleID := doc.Root.Object[1].Value.Array[1].Object[0].Value.ID
+	m.Session.SelectedID = lastBranchTitleID
+	runCmd(t, m, m.handleCommand("next-parent-sibling"))
+	if got, want := m.Session.SelectedID, doc.Root.Object[2].Value.ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after climb", got, want)
+	}
+
+	m.Session.SelectedID = doc.Root.Object[3].Value.ID
+	runCmd(t, m, m.handleCommand("next-parent-sibling"))
+	if got, want := m.Session.Error, "no next parent sibling"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.handleCommand("collapse-all"))
+	if got, want := len(m.Session.Rows), 5; got != want {
+		t.Fatalf("rows = %d, want %d after collapse-all", got, want)
+	}
+	if got, want := m.Session.Status, "collapsed all nodes"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
 	}
 }

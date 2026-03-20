@@ -168,6 +168,73 @@ func (s *Session) MoveInto(doc *document.Document) {
 	}
 }
 
+func (s *Session) ExpandAll(doc *document.Document) {
+	s.Expanded = make(map[document.NodeID]bool)
+	if doc == nil || doc.Root == nil {
+		return
+	}
+	expandAllContainers(doc.Root, s.Expanded)
+}
+
+func expandAllContainers(node *document.Node, expanded map[document.NodeID]bool) {
+	if node == nil || !node.IsContainer() {
+		return
+	}
+	expanded[node.ID] = true
+	switch node.Kind {
+	case document.KindObject:
+		for _, entry := range node.Object {
+			expandAllContainers(entry.Value, expanded)
+		}
+	case document.KindArray:
+		for _, child := range node.Array {
+			expandAllContainers(child, expanded)
+		}
+	}
+}
+
+func (s *Session) CollapseAll(doc *document.Document) {
+	s.Expanded = make(map[document.NodeID]bool)
+	if doc == nil || doc.Root == nil {
+		return
+	}
+	if doc.Root.IsContainer() {
+		s.Expanded[doc.Root.ID] = true
+	}
+}
+
+func (s *Session) NextParentSibling(doc *document.Document) bool {
+	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
+		return false
+	}
+	loc, ok := doc.Find(s.SelectedID)
+	if !ok || loc.Parent == nil {
+		return false
+	}
+
+	currentID := loc.Parent.ID
+	for currentID != 0 {
+		current, ok := doc.Find(currentID)
+		if !ok || current.Parent == nil {
+			return false
+		}
+		switch current.ParentKind {
+		case document.KindObject:
+			if current.Index+1 < len(current.Parent.Object) {
+				s.SelectedID = current.Parent.Object[current.Index+1].Value.ID
+				return true
+			}
+		case document.KindArray:
+			if current.Index+1 < len(current.Parent.Array) {
+				s.SelectedID = current.Parent.Array[current.Index+1].ID
+				return true
+			}
+		}
+		currentID = current.Parent.ID
+	}
+	return false
+}
+
 func (s *Session) SetStatus(message string) {
 	s.Status = message
 	s.Error = ""
