@@ -43,6 +43,65 @@ type Model struct {
 	Clipboard           integration.Clipboard
 }
 
+type prefixMenu struct {
+	Tag   string
+	Items []prefixMenuItem
+}
+
+type prefixMenuItem struct {
+	Key   string
+	Label string
+	Run   func(*Model) tea.Cmd
+}
+
+func (m prefixMenu) item(key string) (prefixMenuItem, bool) {
+	for _, item := range m.Items {
+		if item.Key == key {
+			return item, true
+		}
+	}
+	return prefixMenuItem{}, false
+}
+
+var prefixMenus = map[string]prefixMenu{
+	"g": {
+		Tag: "g:go",
+		Items: []prefixMenuItem{
+			{
+				Key:   "g",
+				Label: "top",
+				Run: func(m *Model) tea.Cmd {
+					m.Session.MoveToTop()
+					return nil
+				},
+			},
+		},
+	},
+	"y": {
+		Tag: "y:copy",
+		Items: []prefixMenuItem{
+			{Key: "p", Label: "path", Run: func(m *Model) tea.Cmd { return m.copyPath() }},
+			{Key: "k", Label: "key", Run: func(m *Model) tea.Cmd { return m.copyKey() }},
+			{Key: "v", Label: "value", Run: func(m *Model) tea.Cmd { return m.copyValue() }},
+			{Key: "s", Label: "subtree", Run: func(m *Model) tea.Cmd { return m.copySubtree() }},
+			{Key: "j", Label: "json", Run: func(m *Model) tea.Cmd { return m.copyDocument() }},
+		},
+	},
+	"z": {
+		Tag: "z:fold",
+		Items: []prefixMenuItem{
+			{Key: "R", Label: "expand-all", Run: func(m *Model) tea.Cmd { return m.expandAll() }},
+			{Key: "M", Label: "collapse-all", Run: func(m *Model) tea.Cmd { return m.collapseAll() }},
+		},
+	},
+	"]": {
+		Tag: "jump",
+		Items: []prefixMenuItem{
+			{Key: "p", Label: "parent-sibling", Run: func(m *Model) tea.Cmd { return m.nextParentSibling() }},
+		},
+	},
+}
+
 func NewModel(doc *document.Document, src source.Input, options ModelOptions) *Model {
 	opts := options.withDefaults()
 
@@ -177,6 +236,10 @@ func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
+	if _, ok := prefixMenuForKey(key); ok {
+		m.pendingPrefix = key
+		return m, nil
+	}
 	switch key {
 	case "j", "down":
 		m.Session.Move(1)
@@ -190,9 +253,6 @@ func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
 		m.refresh()
 	case "G":
 		m.Session.MoveToBottom()
-	case "g", "y", "z", "]":
-		m.pendingPrefix = key
-		return m, nil
 	case "/":
 		m.openPrompt(promptSearch, "/ ", m.Session.Search.Query)
 	case ":":
@@ -232,40 +292,26 @@ func (m *Model) resolvePendingPrefix(key string) (tea.Model, tea.Cmd) {
 	prefix := m.pendingPrefix
 	m.clearPendingPrefix()
 
-	switch prefix {
-	case "g":
-		if key == "g" {
-			m.Session.MoveToTop()
-			return m, nil
-		}
-	case "y":
-		switch key {
-		case "p":
-			return m, m.copyPath()
-		case "k":
-			return m, m.copyKey()
-		case "v":
-			return m, m.copyValue()
-		case "s":
-			return m, m.copySubtree()
-		case "j":
-			return m, m.copyDocument()
-		}
-	case "z":
-		switch key {
-		case "R":
-			return m, m.expandAll()
-		case "M":
-			return m, m.collapseAll()
-		}
-	case "]":
-		if key == "p" {
-			return m, m.nextParentSibling()
+	if menu, ok := prefixMenuForKey(prefix); ok {
+		if item, ok := menu.item(key); ok {
+			return m, item.Run(m)
 		}
 	}
 
 	m.Session.SetError("unknown shortcut: " + prefix + key)
 	return m, nil
+}
+
+func prefixMenuForKey(key string) (prefixMenu, bool) {
+	menu, ok := prefixMenus[key]
+	return menu, ok
+}
+
+func (m *Model) pendingPrefixMenu() (prefixMenu, bool) {
+	if m.pendingPrefix == "" {
+		return prefixMenu{}, false
+	}
+	return prefixMenuForKey(m.pendingPrefix)
 }
 
 func (m *Model) clearPendingPrefix() {

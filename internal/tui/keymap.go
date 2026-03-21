@@ -45,5 +45,6 @@ Commands
   :jq! EXPR transform selected subtree
 
 Other
+  prefixes  footer shows next-key menu
   ?         help
   q         quit`

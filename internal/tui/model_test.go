@@ -325,6 +325,77 @@ func TestPrefixErrorsAndEscape(t *testing.T) {
 	}
 }
 
+func TestGoFoldAndJumpPrefixShortcuts(t *testing.T) {
+	m := testModel(t)
+	m.Session.MoveToBottom()
+
+	updated, cmd := m.Update(key("g"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := m.pendingPrefix, "g"; got != want {
+		t.Fatalf("pendingPrefix = %q, want %q", got, want)
+	}
+
+	updated, cmd = m.Update(key("g"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := m.Session.SelectedID, m.Doc.Root.ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after gg", got, want)
+	}
+	if m.pendingPrefix != "" {
+		t.Fatalf("pendingPrefix = %q, want empty after gg", m.pendingPrefix)
+	}
+
+	initialRows := len(m.Session.Rows)
+	updated, cmd = m.Update(key("z"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	updated, cmd = m.Update(key("R"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got := len(m.Session.Rows); got <= initialRows {
+		t.Fatalf("rows = %d, want more than %d after zR", got, initialRows)
+	}
+
+	updated, cmd = m.Update(key("z"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	updated, cmd = m.Update(key("M"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := len(m.Session.Rows), initialRows; got != want {
+		t.Fatalf("rows = %d, want %d after zM", got, want)
+	}
+
+	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+
+	runCmd(t, m, m.expandAll())
+	m.Session.SelectedID = doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+
+	updated, cmd = m.Update(key("]"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := m.pendingPrefix, "]"; got != want {
+		t.Fatalf("pendingPrefix = %q, want %q", got, want)
+	}
+
+	updated, cmd = m.Update(key("p"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := m.Session.SelectedID, doc.Root.Object[1].Value.Array[1].ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after ]p", got, want)
+	}
+	if got, want := m.Session.Status, "moved to next parent sibling"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+}
+
 func TestExpandCollapseAndNextParentSiblingCommands(t *testing.T) {
 	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2},"tail":true}`))
 	if err != nil {

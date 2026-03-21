@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -8,6 +9,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
+
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string {
+	return ansiPattern.ReplaceAllString(s, "")
+}
 
 func TestViewContainsKeyAndFooter(t *testing.T) {
 	m := testModel(t)
@@ -155,19 +162,34 @@ func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 	}
 }
 
-func TestViewShowsPendingPrefixHint(t *testing.T) {
-	m := testModel(t)
-	m.Width = 120
-	m.Height = 20
-
-	updated, _ := m.Update(key("y"))
-	m = updated.(*Model)
-
-	view := m.View()
-	if !strings.Contains(view, "pending: y") {
-		t.Fatalf("View() = %q, want pending prefix hint", view)
+func TestViewShowsPrefixMenus(t *testing.T) {
+	testCases := []struct {
+		name   string
+		prefix string
+		want   string
+	}{
+		{name: "go", prefix: "g", want: "[g:go] g:top"},
+		{name: "copy", prefix: "y", want: "[y:copy] p:path k:key v:value s:subtree j:json"},
+		{name: "fold", prefix: "z", want: "[z:fold] R:expand-all M:collapse-all"},
+		{name: "jump", prefix: "]", want: "[jump] p:parent-sibling"},
 	}
-	if strings.Contains(view, "S open settings  t quick preview  ? help") {
-		t.Fatalf("View() = %q, unexpectedly shows default footer hint while prefix is pending", view)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			m := testModel(t)
+			m.Width = 120
+			m.Height = 20
+
+			updated, _ := m.Update(key(testCase.prefix))
+			m = updated.(*Model)
+
+			view := stripANSI(m.View())
+			if !strings.Contains(view, testCase.want) {
+				t.Fatalf("View() = %q, want %q", view, testCase.want)
+			}
+			if strings.Contains(view, "S open settings  t quick preview  ? help") {
+				t.Fatalf("View() = %q, unexpectedly shows default footer hint while prefix is pending", view)
+			}
+		})
 	}
 }

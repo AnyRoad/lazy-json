@@ -147,26 +147,37 @@ func (m *Model) renderFooter(theme Theme) string {
 	left := fmt.Sprintf("[%s%s] %s", mode, dirty, sourceLabel)
 	rightParts := make([]string, 0, 2)
 	if message != "" {
-		rightParts = append(rightParts, message)
+		rightParts = append(rightParts, style.Render(message))
 	}
-	if hint := m.footerHint(); hint != "" {
+	if hint := m.footerHint(theme); hint != "" {
 		rightParts = append(rightParts, hint)
 	}
 	right := strings.Join(rightParts, "  ")
-	return theme.Border.Render(left) + " " + style.Render(right)
+	if right == "" {
+		return theme.Border.Render(left)
+	}
+	return theme.Border.Render(left) + " " + right
 }
 
-func (m *Model) footerHint() string {
+func (m *Model) footerHint(theme Theme) string {
 	if m.settingsOpen() {
-		return m.settingsFooterHint()
+		return theme.Status.Render(m.settingsFooterHint())
 	}
 	if m.promptKind != promptNone {
 		return ""
 	}
-	if m.pendingPrefix != "" {
-		return "pending: " + m.pendingPrefix
+	if menu, ok := m.pendingPrefixMenu(); ok {
+		return m.renderPrefixMenu(theme, menu)
 	}
-	return "S open settings  t quick preview  ? help"
+	return theme.Status.Render("S open settings  t quick preview  ? help")
+}
+
+func (m *Model) renderPrefixMenu(theme Theme, menu prefixMenu) string {
+	items := make([]string, 0, len(menu.Items))
+	for _, item := range menu.Items {
+		items = append(items, item.Key+":"+item.Label)
+	}
+	return theme.Help.Render("["+menu.Tag+"]") + " " + theme.Status.Render(strings.Join(items, " "))
 }
 
 func trimWidth(s string, width int) string {

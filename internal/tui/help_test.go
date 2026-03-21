@@ -54,6 +54,9 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, ":settings open theme settings dialog") {
 		t.Fatalf("helpView() = %q, want settings command", help)
 	}
+	if !strings.Contains(help, "prefixes  footer shows next-key menu") {
+		t.Fatalf("helpView() = %q, want prefix footer help", help)
+	}
 }
 
 func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
