@@ -15,7 +15,7 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, "t         quick preview next theme") {
 		t.Fatalf("helpView() = %q, want quick preview shortcut", help)
 	}
-	if !strings.Contains(help, "S         open theme settings dialog") {
+	if !strings.Contains(help, "S         open settings dialog") {
 		t.Fatalf("helpView() = %q, want settings shortcut", help)
 	}
 	if !strings.Contains(help, "]p        next parent sibling") {
@@ -42,17 +42,26 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, ":next-parent-sibling") {
 		t.Fatalf("helpView() = %q, want next-parent-sibling command", help)
 	}
-	if !strings.Contains(help, "s         save preview to settings.json") {
+	if !strings.Contains(help, "s         save settings to settings.json") {
 		t.Fatalf("helpView() = %q, want explicit save help", help)
 	}
-	if !strings.Contains(help, "persist   saved theme restores on next launch") {
+	if !strings.Contains(help, "persist   saved settings restore on next launch") {
 		t.Fatalf("helpView() = %q, want persisted theme help", help)
 	}
 	if !strings.Contains(help, "themes    built-ins + config themes/*.json") {
 		t.Fatalf("helpView() = %q, want external theme help", help)
 	}
-	if !strings.Contains(help, ":settings open theme settings dialog") {
+	if !strings.Contains(help, ":settings open settings dialog") {
 		t.Fatalf("helpView() = %q, want settings command", help)
+	}
+	if !strings.Contains(help, "wrap      long strings setting affects display only") {
+		t.Fatalf("helpView() = %q, want wrap settings help", help)
+	}
+	if !strings.Contains(help, "indent    pretty save/print/copy uses selected indent") {
+		t.Fatalf("helpView() = %q, want indent settings help", help)
+	}
+	if strings.Contains(help, "theme picker") {
+		t.Fatalf("helpView() = %q, unexpectedly mentions theme picker", help)
 	}
 	if !strings.Contains(help, "prefixes  footer shows next-key menu") {
 		t.Fatalf("helpView() = %q, want prefix footer help", help)
@@ -68,7 +77,7 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 	readme := string(data)
 	snippets := []string{
 		"- `t`: quick-preview the next theme for the current session",
-		"- `S`: open the theme settings dialog",
+		"- `S`: open the settings dialog",
 		"### Open a file with a startup selection",
 		"lazy-json --select '$.items[0].name' data.json",
 		"### Open stdin with a startup selection",
@@ -83,14 +92,19 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"- `ys`: copy the selected subtree as pretty JSON",
 		"- `yj`: copy the whole document as pretty JSON",
 		"- `:theme`: quick-preview the next theme without saving",
-		"- `:settings`: open the theme settings dialog",
+		"- `:settings`: open the settings dialog",
 		"- `:copy-path`: copy the selected JSON path",
 		"- `:copy-json`: copy the whole document as pretty JSON",
 		"- `:expand-all`: expand every object and array in the document",
 		"- `:next-parent-sibling`: jump to the next sibling of the selected node's parent, climbing ancestors as needed",
-		"- `s`: save the current preview to `settings.json`",
-		"`lazy-json` stores its saved theme under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.",
-		"They are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.",
+		"- `s`: save the current settings to `settings.json`",
+		"`lazy-json` stores theme, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.",
+		"Theme, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.",
+		"- `left` / `right` or `h` / `l`: change the selected setting",
+		"- `up` / `down` or `j` / `k`: move between settings rows",
+		"- `enter` / `space`: cycle the selected setting",
+		"- `Long strings`: toggle wrapping for displayed string scalar values only",
+		"- `Save indent`: choose `spaces:2`, `spaces:3`, `spaces:4`, or `tabs` for pretty JSON output",
 	}
 
 	for _, snippet := range snippets {

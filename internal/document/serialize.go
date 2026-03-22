@@ -6,16 +6,29 @@ import (
 	"strings"
 )
 
+const defaultIndent = "  "
+
 func (d *Document) MarshalIndent() ([]byte, error) {
 	if d.Root == nil {
 		return nil, fmt.Errorf("document is empty")
 	}
-	return MarshalIndentNode(d.Root)
+	return MarshalIndentNodeWithIndent(d.Root, defaultIndent)
+}
+
+func (d *Document) MarshalIndentWith(indent string) ([]byte, error) {
+	if d.Root == nil {
+		return nil, fmt.Errorf("document is empty")
+	}
+	return MarshalIndentNodeWithIndent(d.Root, indent)
 }
 
 func MarshalIndentNode(node *Node) ([]byte, error) {
+	return MarshalIndentNodeWithIndent(node, defaultIndent)
+}
+
+func MarshalIndentNodeWithIndent(node *Node, indent string) ([]byte, error) {
 	var b strings.Builder
-	if err := writeNode(&b, node, 0); err != nil {
+	if err := writeNode(&b, node, 0, normalizeIndent(indent)); err != nil {
 		return nil, err
 	}
 	b.WriteByte('\n')
@@ -30,7 +43,14 @@ func MarshalCompactNode(node *Node) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-func writeNode(b *strings.Builder, node *Node, depth int) error {
+func normalizeIndent(indent string) string {
+	if indent == "" {
+		return defaultIndent
+	}
+	return indent
+}
+
+func writeNode(b *strings.Builder, node *Node, depth int, indent string) error {
 	switch node.Kind {
 	case KindObject:
 		if len(node.Object) == 0 {
@@ -39,11 +59,11 @@ func writeNode(b *strings.Builder, node *Node, depth int) error {
 		}
 		b.WriteString("{\n")
 		for i, entry := range node.Object {
-			b.WriteString(strings.Repeat("  ", depth+1))
+			b.WriteString(strings.Repeat(indent, depth+1))
 			key, _ := json.Marshal(entry.Key)
 			b.Write(key)
 			b.WriteString(": ")
-			if err := writeNode(b, entry.Value, depth+1); err != nil {
+			if err := writeNode(b, entry.Value, depth+1, indent); err != nil {
 				return err
 			}
 			if i < len(node.Object)-1 {
@@ -51,7 +71,7 @@ func writeNode(b *strings.Builder, node *Node, depth int) error {
 			}
 			b.WriteByte('\n')
 		}
-		b.WriteString(strings.Repeat("  ", depth))
+		b.WriteString(strings.Repeat(indent, depth))
 		b.WriteByte('}')
 	case KindArray:
 		if len(node.Array) == 0 {
@@ -60,8 +80,8 @@ func writeNode(b *strings.Builder, node *Node, depth int) error {
 		}
 		b.WriteString("[\n")
 		for i, child := range node.Array {
-			b.WriteString(strings.Repeat("  ", depth+1))
-			if err := writeNode(b, child, depth+1); err != nil {
+			b.WriteString(strings.Repeat(indent, depth+1))
+			if err := writeNode(b, child, depth+1, indent); err != nil {
 				return err
 			}
 			if i < len(node.Array)-1 {
@@ -69,7 +89,7 @@ func writeNode(b *strings.Builder, node *Node, depth int) error {
 			}
 			b.WriteByte('\n')
 		}
-		b.WriteString(strings.Repeat("  ", depth))
+		b.WriteString(strings.Repeat(indent, depth))
 		b.WriteByte(']')
 	case KindString:
 		data, _ := json.Marshal(node.String)

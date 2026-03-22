@@ -201,7 +201,7 @@ func resolveStartupSettings(settings config.Settings, registry tui.ThemeRegistry
 		return settings, nil
 	}
 
-	settings = config.DefaultSettings()
+	settings.Theme = config.DefaultThemeName
 	if requested == "" || strings.EqualFold(requested, config.DefaultThemeName) {
 		return settings, nil
 	}

@@ -11,6 +11,20 @@ import (
 	"github.com/anyroad/lazy-json/internal/session"
 )
 
+const (
+	settingsRowTheme = iota
+	settingsRowWrapLongStrings
+	settingsRowSaveIndent
+	settingsRowCount
+)
+
+var settingsIndentOptions = []config.SaveIndent{
+	{Kind: config.IndentKindSpaces, Size: 2},
+	{Kind: config.IndentKindSpaces, Size: 3},
+	{Kind: config.IndentKindSpaces, Size: 4},
+	{Kind: config.IndentKindTabs},
+}
+
 func (m *Model) settingsOpen() bool {
 	return m.Session != nil && m.Session.Mode == session.ModeSettings
 }
@@ -18,29 +32,36 @@ func (m *Model) settingsOpen() bool {
 func (m *Model) openSettings() {
 	m.Session.Mode = session.ModeSettings
 	m.clearPendingPrefix()
+	m.settingsRow = settingsRowTheme
 }
 
 func (m *Model) closeSettings() {
 	m.Session.Mode = session.ModeNormal
 
-	if strings.EqualFold(m.Session.ThemeName, m.Settings.Theme) {
+	if m.currentSettings() == m.Settings.WithDefaults() {
 		m.Session.SetStatus("closed settings")
 		return
 	}
 
-	m.Session.SetStatus(fmt.Sprintf("kept preview theme %q for this session", m.Session.ThemeName))
+	m.Session.SetStatus("kept preview settings for this session")
 }
 
 func (m *Model) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.closeSettings()
+	case "up", "k":
+		m.moveSettingsRow(-1)
+	case "down", "j":
+		m.moveSettingsRow(1)
 	case "h", "left":
-		m.previewSettingsTheme(-1)
+		m.adjustSettingsRow(-1)
 	case "l", "right":
-		m.previewSettingsTheme(1)
+		m.adjustSettingsRow(1)
+	case "enter", " ":
+		m.activateSettingsRow()
 	case "s":
-		m.saveThemeSettings()
+		m.saveSettings()
 	}
 	return m, nil
 }
@@ -55,7 +76,7 @@ func (m *Model) previewSettingsTheme(step int) {
 	index = (index + step + len(themes)) % len(themes)
 	m.Session.ThemeName = themes[index].Name
 
-	if strings.EqualFold(m.Session.ThemeName, m.Settings.Theme) {
+	if strings.EqualFold(m.Session.ThemeName, m.Settings.WithDefaults().Theme) {
 		m.Session.SetStatus(fmt.Sprintf("previewing saved theme %q", m.Session.ThemeName))
 		return
 	}
@@ -63,23 +84,33 @@ func (m *Model) previewSettingsTheme(step int) {
 	m.Session.SetStatus(fmt.Sprintf("previewing theme %q; press s to save", m.Session.ThemeName))
 }
 
-func (m *Model) saveThemeSettings() {
+func (m *Model) currentSettings() config.Settings {
+	settings := m.ActiveSettings.WithDefaults()
+	settings.Theme = m.ThemeRegistry.ThemeByName(m.Session.ThemeName).Name
+	return settings
+}
+
+func (m *Model) saveSettings() {
 	if !m.settingsSaveAvailable() {
 		m.Session.SetError("settings path unavailable; could not resolve user config dir")
 		return
 	}
 
-	settings := m.Settings.WithDefaults()
-	settings.Theme = m.ThemeRegistry.ThemeByName(m.Session.ThemeName).Name
+	settings := m.currentSettings()
 	if err := config.SaveSettings(m.SettingsPath, settings); err != nil {
 		m.Session.SetError(err.Error())
 		return
 	}
 
 	m.Settings = settings
+	m.ActiveSettings = settings
 	m.SettingsFilePresent = true
 	m.SettingsPersisted = true
-	m.Session.SetStatus(fmt.Sprintf("saved theme %q", m.Settings.Theme))
+	m.Session.SetStatus("saved settings")
+}
+
+func (m *Model) saveThemeSettings() {
+	m.saveSettings()
 }
 
 func (m *Model) settingsSaveAvailable() bool {
@@ -88,16 +119,69 @@ func (m *Model) settingsSaveAvailable() bool {
 
 func (m *Model) settingsDialogHint() string {
 	if m.settingsSaveAvailable() {
-		return "h/left prev  l/right next  s save  esc close"
+		return "up/down row  left/right change  s save  esc close"
 	}
-	return "h/left prev  l/right next  s unavailable  esc close"
+	return "up/down row  left/right change  s unavailable  esc close"
 }
 
 func (m *Model) settingsFooterHint() string {
 	if m.settingsSaveAvailable() {
-		return "h/l preview  s save settings.json  esc close"
+		return "up/down row  left/right change  s save settings.json  esc close"
 	}
-	return "h/l preview  s unavailable  esc close"
+	return "up/down row  left/right change  s unavailable  esc close"
+}
+
+func (m *Model) moveSettingsRow(step int) {
+	m.settingsRow = (m.settingsRow + step + settingsRowCount) % settingsRowCount
+}
+
+func (m *Model) activateSettingsRow() {
+	switch m.settingsRow {
+	case settingsRowTheme:
+		m.previewSettingsTheme(1)
+	case settingsRowWrapLongStrings:
+		m.toggleWrapLongStrings()
+	case settingsRowSaveIndent:
+		m.cycleSaveIndent(1)
+	}
+}
+
+func (m *Model) adjustSettingsRow(step int) {
+	switch m.settingsRow {
+	case settingsRowTheme:
+		m.previewSettingsTheme(step)
+	case settingsRowWrapLongStrings:
+		m.toggleWrapLongStrings()
+	case settingsRowSaveIndent:
+		m.cycleSaveIndent(step)
+	}
+}
+
+func (m *Model) toggleWrapLongStrings() {
+	settings := m.ActiveSettings.WithDefaults()
+	settings.WrapLongStrings = !settings.WrapLongStrings
+	m.ActiveSettings = settings
+	state := "off"
+	if settings.WrapLongStrings {
+		state = "on"
+	}
+	m.Session.SetStatus(fmt.Sprintf("previewing long string wrapping %s; press s to save", state))
+}
+
+func (m *Model) cycleSaveIndent(step int) {
+	current := m.ActiveSettings.WithDefaults().SaveIndent
+	index := 0
+	for optionIndex, option := range settingsIndentOptions {
+		if option.WithDefaults() == current {
+			index = optionIndex
+			break
+		}
+	}
+	index = (index + step + len(settingsIndentOptions)) % len(settingsIndentOptions)
+	settings := m.ActiveSettings.WithDefaults()
+	settings.SaveIndent = settingsIndentOptions[index].WithDefaults()
+	m.ActiveSettings = settings
+	m.Session.SetStatus(fmt.Sprintf("previewing save indent %s; press s to save", settings.SaveIndent.Label()))
 }
 
 func (m *Model) settingsThemeIndex(themes []Theme, current string) int {
@@ -113,8 +197,10 @@ func (m *Model) settingsThemeIndex(themes []Theme, current string) int {
 func (m *Model) settingsDialogView(theme Theme, width int) string {
 	themes := m.ThemeRegistry.Themes()
 	currentIndex := m.settingsThemeIndex(themes, m.Session.ThemeName)
-	currentTheme := m.ThemeRegistry.ThemeByName(m.Session.ThemeName).Name
-	savedTheme := m.Settings.WithDefaults().Theme
+	currentSettings := m.currentSettings()
+	currentTheme := currentSettings.Theme
+	savedSettings := m.Settings.WithDefaults()
+	savedTheme := savedSettings.Theme
 
 	position := "0/0"
 	if len(themes) > 0 {
@@ -134,7 +220,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		stateLabel = theme.Status.Render("fallback")
 		savedLabel = "Saved theme unavailable; using " + savedTheme
 	}
-	if !strings.EqualFold(currentTheme, savedTheme) {
+	if currentSettings != savedSettings {
 		stateLabel = theme.Status.Render("preview only")
 	}
 
@@ -143,17 +229,30 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		saveHint = theme.Error.Render("Save unavailable: config path could not be resolved.")
 	}
 
+	rows := []string{
+		m.renderSettingsRow(theme, settingsRowTheme, "Theme", theme.Selected.Render(" "+currentTheme+" "), theme.Muted.Render(position)),
+	}
+	rows = append(rows,
+		m.renderSettingsRow(theme, settingsRowWrapLongStrings, "Long strings", theme.Selected.Render(" "+settingsBoolLabel(currentSettings.WrapLongStrings)+" "), ""),
+		m.renderSettingsRow(theme, settingsRowSaveIndent, "Save indent", theme.Selected.Render(" "+currentSettings.SaveIndent.Label()+" "), ""),
+	)
+
 	lines := []string{
-		theme.Status.Render("Theme Settings"),
+		theme.Status.Render("Settings"),
 		"",
-		theme.Key.Render("Theme") + " " + theme.Selected.Render(" "+currentTheme+" ") + " " + theme.Muted.Render(position) + " " + stateLabel,
+		rows[0],
+	}
+	lines = append(lines, rows[1:]...)
+	lines = append(lines,
 		theme.Muted.Render(savedLabel),
+		theme.Muted.Render("Saved long strings: "+settingsBoolLabel(savedSettings.WrapLongStrings)+"  Saved indent: "+savedSettings.SaveIndent.Label()),
+		stateLabel,
 		theme.Help.Render(m.settingsDialogHint()),
 		saveHint,
 		theme.Muted.Render("Built-ins + config themes/*.json appear here."),
-	}
+	)
 
-	modalWidth := 60
+	modalWidth := 68
 	if width > 0 && width-4 < modalWidth {
 		modalWidth = width - 4
 	}
@@ -167,6 +266,24 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		BorderForeground(theme.Border.GetForeground()).
 		Padding(0, 1).
 		Render(strings.Join(lines, "\n"))
+}
+
+func (m *Model) renderSettingsRow(theme Theme, row int, label, value, extra string) string {
+	line := theme.Key.Render(label) + " " + value
+	if extra != "" {
+		line += " " + extra
+	}
+	if row == m.settingsRow {
+		return theme.Selected.Render(line)
+	}
+	return line
+}
+
+func settingsBoolLabel(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
 }
 
 func (m *Model) renderSettingsOverlay(base string, theme Theme, width, height int) string {

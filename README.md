@@ -10,11 +10,11 @@
 
 - tree-first navigation with `h/j/k/l`, `gg`, and `G`
 - prefix shortcuts for clipboard actions, structural jumps, and tree-wide expand/collapse
-- ordered object rendering with syntax highlighting, built-in themes, and persistent theme settings
+- ordered object rendering with syntax highlighting, built-in themes, and persistent editor settings
 - collapse and expand for objects and arrays
 - substring search with `/`, `n`, and `N`
 - structured editing for scalars, object keys, object fields, and array items
-- canonical pretty-printed JSON saves
+- configurable pretty-printed JSON saves
 - file-backed and stdin-backed sessions
 - optional subtree editing through `$EDITOR`
 - optional `jq` transforms through `:jq` and `:jq!`
@@ -89,7 +89,7 @@ You can add `--select '$.path.to.node'` to either startup form to open with a sp
 - `zR` / `zM`: expand all containers / collapse all containers except the root
 - `?`: open the built-in help screen
 - `t`: quick-preview the next theme for the current session
-- `S`: open the theme settings dialog
+- `S`: open the settings dialog
 
 ### Editing model
 
@@ -111,7 +111,7 @@ This keeps edits valid and avoids the complexity of embedding a full text editor
 - `ys`: copy the selected subtree as pretty JSON
 - `yj`: copy the whole document as pretty JSON
 
-All clipboard copies use structured JSON output rather than the rendered screen text. `yv` preserves valid JSON scalars and compact containers, while `ys` and `yj` use the same canonical pretty formatting as saves.
+All clipboard copies use structured JSON output rather than the rendered screen text. `yv` preserves valid JSON scalars and compact containers, while `ys` and `yj` use the same current pretty formatting as saves.
 
 ### Search
 
@@ -126,11 +126,11 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 - `:w`: save to the current file path
 - `:w path.json`: save to a specific path
 - `:x`: save and quit for file-backed sessions; for stdin-backed sessions with no file path, print to stdout and quit
-- `:print`: print canonical JSON to stdout and quit
+- `:print`: print pretty JSON to stdout and quit
 - `:q`: quit if there are no unsaved changes
 - `:q!`: quit without saving
 - `:theme`: quick-preview the next theme without saving
-- `:settings`: open the theme settings dialog
+- `:settings`: open the settings dialog
 - `:copy-path`: copy the selected JSON path
 - `:copy-key`: copy the selected object key
 - `:copy-value`: copy the selected value as compact JSON
@@ -143,18 +143,25 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 - `:jq EXPR`: apply a `jq` expression to the whole document
 - `:jq! EXPR`: apply a `jq` expression to the selected subtree
 
-### Theme Settings
+### Settings
 
-Press `S` or run `:settings` to open the theme settings dialog. The dialog lists built-in themes first and then valid external themes discovered from your config directory. Inside the dialog:
+Press `S` or run `:settings` to open the settings dialog. The dialog currently exposes three rows:
 
-- `h` / `left`: preview the previous theme
-- `l` / `right`: preview the next theme
-- `s`: save the current preview to `settings.json`
+- `Theme`: cycle built-in themes first and then valid external themes from your config directory
+- `Long strings`: toggle wrapping for displayed string scalar values only
+- `Save indent`: choose `spaces:2`, `spaces:3`, `spaces:4`, or `tabs` for pretty JSON output
+
+Inside the dialog:
+
+- `up` / `down` or `j` / `k`: move between settings rows
+- `left` / `right` or `h` / `l`: change the selected setting
+- `enter` / `space`: cycle the selected setting
+- `s`: save the current settings to `settings.json`
 - `esc`: close the dialog without writing to disk
 
-Theme previews apply immediately to the current session. They are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches. A theme saved from the dialog is restored automatically on the next launch.
+Theme previews and long-string wrapping apply immediately to the current session. The current save-indent setting also applies immediately to later pretty JSON output from `:w`, `:x`, `:print`, `ys`, and `yj`. Theme, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.
 
-`lazy-json` stores its saved theme under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`. The exact base directory follows `os.UserConfigDir()` for your platform; for example, on Linux this is typically `~/.config/lazy-json/settings.json` and `~/.config/lazy-json/themes/`.
+`lazy-json` stores theme, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`. The exact base directory follows `os.UserConfigDir()` for your platform; for example, on Linux this is typically `~/.config/lazy-json/settings.json` and `~/.config/lazy-json/themes/`.
 
 External theme files are JSON objects with a required `name` plus optional style slots such as `key`, `string`, `number`, `bool`, `null`, `muted`, `selected`, `search_hit`, `status`, `error`, `border`, `help`, and `prompt`. Each slot supports `foreground`, optional `background`, and optional `bold`. For example:
 
@@ -199,7 +206,7 @@ Transform just the selected subtree:
 
 ### Save behavior
 
-All saves rewrite the current document as canonical pretty JSON. The tool does not preserve the original whitespace layout.
+Pretty JSON output follows the current `Save indent` setting from the settings dialog. That applies to file saves plus other pretty-output paths such as `:print`, `ys`, and `yj`. The tool still does not preserve the original whitespace layout, and long-string wrapping remains display-only.
 
 ## Developer Guide
 

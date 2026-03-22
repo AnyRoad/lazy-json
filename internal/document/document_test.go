@@ -40,6 +40,31 @@ func TestMarshalIndent(t *testing.T) {
 	}
 }
 
+func TestMarshalIndentWithIndent(t *testing.T) {
+	doc, err := Parse([]byte(`{"name":"Ada","list":[1,true]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := doc.MarshalIndentWith("\t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "{\n\t\"name\": \"Ada\",\n\t\"list\": [\n\t\t1,\n\t\ttrue\n\t]\n}\n"
+	if string(got) != want {
+		t.Fatalf("MarshalIndentWith(tab) = %q, want %q", got, want)
+	}
+
+	node, err := MarshalIndentNodeWithIndent(doc.Root, "   ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNode := "{\n   \"name\": \"Ada\",\n   \"list\": [\n      1,\n      true\n   ]\n}\n"
+	if string(node) != wantNode {
+		t.Fatalf("MarshalIndentNodeWithIndent(3 spaces) = %q, want %q", node, wantNode)
+	}
+}
+
 func TestEditOperations(t *testing.T) {
 	doc, err := Parse([]byte(`{"name":"Ada","list":[1]}`))
 	if err != nil {

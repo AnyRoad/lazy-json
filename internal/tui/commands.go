@@ -196,7 +196,7 @@ func (m *Model) addArrayItem(input string) tea.Cmd {
 }
 
 func (m *Model) save(path string) error {
-	data, err := m.Doc.MarshalIndent()
+	data, err := m.Doc.MarshalIndentWith(m.ActiveSettings.WithDefaults().SaveIndent.String())
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func (m *Model) copySubtree() tea.Cmd {
 		m.Session.SetError(err.Error())
 		return nil
 	}
-	data, err := document.MarshalIndentNode(node)
+	data, err := document.MarshalIndentNodeWithIndent(node, m.ActiveSettings.WithDefaults().SaveIndent.String())
 	if err != nil {
 		m.Session.SetError(err.Error())
 		return nil
@@ -279,7 +279,7 @@ func (m *Model) copySubtree() tea.Cmd {
 }
 
 func (m *Model) copyDocument() tea.Cmd {
-	data, err := m.Doc.MarshalIndent()
+	data, err := m.Doc.MarshalIndentWith(m.ActiveSettings.WithDefaults().SaveIndent.String())
 	if err != nil {
 		m.Session.SetError(err.Error())
 		return nil
@@ -312,7 +312,7 @@ func (m *Model) nextParentSibling() tea.Cmd {
 
 func (m *Model) saveAndQuit(path string) tea.Cmd {
 	if path == "" && m.Session.SourceKind == source.KindStdin && m.Session.SourcePath == "" {
-		data, err := m.Doc.MarshalIndent()
+		data, err := m.Doc.MarshalIndentWith(m.ActiveSettings.WithDefaults().SaveIndent.String())
 		if err != nil {
 			m.Session.SetError(err.Error())
 			return nil
@@ -328,7 +328,7 @@ func (m *Model) saveAndQuit(path string) tea.Cmd {
 }
 
 func (m *Model) printAndQuit() tea.Cmd {
-	data, err := m.Doc.MarshalIndent()
+	data, err := m.Doc.MarshalIndentWith(m.ActiveSettings.WithDefaults().SaveIndent.String())
 	if err != nil {
 		m.Session.SetError(err.Error())
 		return nil

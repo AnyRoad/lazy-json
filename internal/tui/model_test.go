@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"os"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -218,6 +219,42 @@ func TestCommandSaveAndPrint(t *testing.T) {
 	}
 }
 
+func TestSavePrintAndPrettyCopyUseActiveSaveIndent(t *testing.T) {
+	clipboard := &stubClipboard{}
+	m := testModelWithOptions(t, ModelOptions{Clipboard: clipboard})
+	m.ActiveSettings = config.Settings{
+		Theme:      config.DefaultThemeName,
+		SaveIndent: config.SaveIndent{Kind: config.IndentKindTabs},
+	}.WithDefaults()
+
+	runCmd(t, m, m.handleCommand("copy-json"))
+	if got, want := clipboard.writes[len(clipboard.writes)-1], "{\n\t\"name\": \"Ada\",\n\t\"items\": [\n\t\t1,\n\t\t2\n\t]\n}"; got != want {
+		t.Fatalf("copy-json = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.handleCommand("print"))
+	if got, want := string(m.ExitOutput), "{\n\t\"name\": \"Ada\",\n\t\"items\": [\n\t\t1,\n\t\t2\n\t]\n}\n"; got != want {
+		t.Fatalf("ExitOutput = %q, want %q", got, want)
+	}
+
+	m = testModelWithOptions(t, ModelOptions{Clipboard: clipboard})
+	m.ActiveSettings = config.Settings{
+		Theme:      config.DefaultThemeName,
+		SaveIndent: config.SaveIndent{Kind: config.IndentKindSpaces, Size: 3},
+	}.WithDefaults()
+	path := t.TempDir() + "/saved.json"
+	if err := m.save(path); err != nil {
+		t.Fatalf("save() error = %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", path, err)
+	}
+	if got, want := string(data), "{\n   \"name\": \"Ada\",\n   \"items\": [\n      1,\n      2\n   ]\n}\n"; got != want {
+		t.Fatalf("saved file = %q, want %q", got, want)
+	}
+}
+
 func TestDeleteAndSearch(t *testing.T) {
 	m := testModel(t)
 	m.Session.SelectedID = m.Doc.Root.Object[0].Value.ID
@@ -330,6 +367,46 @@ func TestCopySubtreeAndClipboardFailure(t *testing.T) {
 	runCmd(t, m, m.handleCommand("copy-subtree"))
 	if got, want := clipboard.writes[len(clipboard.writes)-1], `"Ada"`; got != want {
 		t.Fatalf("clipboard write = %q, want %q", got, want)
+	}
+}
+
+func TestSettingsModalPreviewsWrapAndIndentWithoutSaving(t *testing.T) {
+	m := testModel(t)
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+
+	if !m.ActiveSettings.WrapLongStrings {
+		t.Fatal("ActiveSettings.WrapLongStrings = false, want true")
+	}
+	if m.Settings.WrapLongStrings {
+		t.Fatal("Settings.WrapLongStrings = true, want false before save")
+	}
+
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+
+	if got, want := m.ActiveSettings.SaveIndent.Label(), "spaces:3"; got != want {
+		t.Fatalf("ActiveSettings.SaveIndent = %q, want %q", got, want)
+	}
+	if got, want := m.Settings.WithDefaults().SaveIndent.Label(), "spaces:2"; got != want {
+		t.Fatalf("Settings.SaveIndent = %q, want %q before save", got, want)
+	}
+
+	updated, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updated.(*Model)
+
+	if got, want := m.Session.Status, "kept preview settings for this session"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if !m.ActiveSettings.WrapLongStrings {
+		t.Fatal("ActiveSettings.WrapLongStrings = false after close, want true")
 	}
 }
 

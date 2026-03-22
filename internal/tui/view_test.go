@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/anyroad/lazy-json/internal/config"
+	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/source"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
@@ -91,7 +93,7 @@ func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	m.openSettings()
 
 	initialView := m.View()
-	if !strings.Contains(initialView, "Theme Settings") {
+	if !strings.Contains(initialView, "Settings") {
 		t.Fatalf("View() = %q, want settings title", initialView)
 	}
 	if !strings.Contains(initialView, "saved") {
@@ -100,8 +102,11 @@ func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	if !strings.Contains(initialView, "Saved theme: "+config.DefaultThemeName) {
 		t.Fatalf("View() = %q, want saved theme label", initialView)
 	}
-	if !strings.Contains(initialView, "h/l preview  s save settings.json  esc close") {
+	if !strings.Contains(initialView, "up/down row  left/right change") {
 		t.Fatalf("View() = %q, want settings footer hint", initialView)
+	}
+	if strings.Contains(initialView, "enter open theme") {
+		t.Fatalf("View() = %q, unexpectedly advertises theme popup controls", initialView)
 	}
 	if !strings.Contains(initialView, "Save writes settings.json on demand.") {
 		t.Fatalf("View() = %q, want explicit save hint", initialView)
@@ -156,8 +161,8 @@ func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 	m = updated.(*Model)
 
 	savedView := m.View()
-	if !strings.Contains(savedView, `saved theme "`+nextTheme+`"`) {
-		t.Fatalf("View() = %q, want saved footer message", savedView)
+	if got, want := m.Session.Status, "saved settings"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
 	}
 	if !strings.Contains(savedView, "Saved theme: "+nextTheme) {
 		t.Fatalf("View() = %q, want saved theme label", savedView)
@@ -193,5 +198,43 @@ func TestViewShowsPrefixMenus(t *testing.T) {
 				t.Fatalf("View() = %q, unexpectedly shows default footer hint while prefix is pending", view)
 			}
 		})
+	}
+}
+
+func TestRenderRowLinesWrapLongStrings(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"abcdefghijklmnopqrstuvwxyz"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{})
+	row := m.Session.Rows[1]
+	theme := m.theme()
+
+	unwrapped := m.renderRowLines(row, theme, 20)
+	if got, want := len(unwrapped), 1; got != want {
+		t.Fatalf("len(unwrapped) = %d, want %d", got, want)
+	}
+
+	m.ActiveSettings.WrapLongStrings = true
+	wrapped := m.renderRowLines(row, theme, 20)
+	if len(wrapped) < 2 {
+		t.Fatalf("len(wrapped) = %d, want at least 2", len(wrapped))
+	}
+
+	joined := stripANSI(strings.Join(wrapped, "\n"))
+	lastLine := stripANSI(wrapped[len(wrapped)-1])
+	if !strings.Contains(lastLine, "$.name") {
+		t.Fatalf("wrapped lines = %q, want path on final wrapped line", joined)
+	}
+	if strings.TrimSpace(strings.ReplaceAll(lastLine, "$.name", "")) == "" {
+		t.Fatalf("wrapped lines = %q, want path attached to the final value fragment", joined)
+	}
+	for _, line := range wrapped[1 : len(wrapped)-1] {
+		if strings.Contains(stripANSI(line), "$.name") {
+			t.Fatalf("wrapped middle continuation line = %q, want no repeated path", stripANSI(line))
+		}
+	}
+	if !strings.Contains(joined, "abcdefghi") || !strings.Contains(joined, "jklmnopqrs") {
+		t.Fatalf("wrapped lines = %q, want split string fragments", joined)
 	}
 }

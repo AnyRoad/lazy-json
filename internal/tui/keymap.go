@@ -22,22 +22,26 @@ Clipboard
   ys        copy subtree as pretty JSON
   yj        copy whole document
 
-Theme
+Settings
   t         quick preview next theme
-  S         open theme settings dialog
-  h/l       previous / next theme in settings
-  s         save preview to settings.json
-  persist   saved theme restores on next launch
+  S         open settings dialog
+  up/down   move between settings rows
+  left/right change the selected setting
+  enter     cycle the selected setting
+  s         save settings to settings.json
+  persist   saved settings restore on next launch
   themes    built-ins + config themes/*.json
+  wrap      long strings setting affects display only
+  indent    pretty save/print/copy uses selected indent
 
 Commands
   :w        save
   :w path   save to path
   :x        save and quit
-  :print    print JSON and quit
+  :print    print pretty JSON and quit
   :q / :q!  quit / force quit
   :theme    quick preview next theme
-  :settings open theme settings dialog
+  :settings open settings dialog
   :copy-*   copy path/key/value/subtree/document
   :expand-all / :collapse-all
   :next-parent-sibling

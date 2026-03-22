@@ -218,6 +218,10 @@ func TestLoadModelOptionsFromPathsRestoresThemeAfterModalSaveAndRestart(t *testi
 	model = updated.(*tui.Model)
 	updated, _ = model.Update(runeKey("l"))
 	model = updated.(*tui.Model)
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	model = updated.(*tui.Model)
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(*tui.Model)
 	updated, _ = model.Update(runeKey("s"))
 	model = updated.(*tui.Model)
 
@@ -246,12 +250,18 @@ func TestLoadModelOptionsFromPathsRestoresThemeAfterModalSaveAndRestart(t *testi
 
 func TestLoadModelOptionsFromPathsFallsBackWhenConfiguredThemeMissing(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
-	writeTestFile(t, paths.SettingsFile, []byte("{\n  \"theme\": \"missing-theme\"\n}\n"))
+	writeTestFile(t, paths.SettingsFile, []byte("{\n  \"theme\": \"missing-theme\",\n  \"wrap_long_strings\": true,\n  \"save_indent\": {\n    \"kind\": \"tabs\"\n  }\n}\n"))
 
 	model := newTestModel(t, loadModelOptionsFromPaths(paths))
 
 	if got, want := model.Settings.Theme, config.DefaultThemeName; got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+	if !model.Settings.WrapLongStrings {
+		t.Fatal("Settings.WrapLongStrings = false, want true")
+	}
+	if got, want := model.Settings.SaveIndent.Label(), "tabs"; got != want {
+		t.Fatalf("Settings.SaveIndent = %q, want %q", got, want)
 	}
 	if got, want := model.Session.ThemeName, config.DefaultThemeName; got != want {
 		t.Fatalf("Session.ThemeName = %q, want %q", got, want)
@@ -420,10 +430,10 @@ func TestLoadModelOptionsResolverFailureDisablesSettingsSave(t *testing.T) {
 	if !strings.Contains(view, "unavailable") {
 		t.Fatalf("View() = %q, want unavailable state label", view)
 	}
-	if !strings.Contains(view, "h/left prev  l/right next  s unavailable  esc close") {
+	if !strings.Contains(view, "up/down row  left/right change  s unavailable") {
 		t.Fatalf("View() = %q, want unavailable modal controls", view)
 	}
-	if !strings.Contains(view, "h/l preview  s unavailable  esc close") {
+	if !strings.Contains(view, "s unavailable") {
 		t.Fatalf("View() = %q, want unavailable footer hint", view)
 	}
 	if strings.Contains(view, "h/l preview  s save settings.json  esc close") {

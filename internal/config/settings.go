@@ -18,14 +18,28 @@ const (
 	DefaultThemeName = "default"
 )
 
+type IndentKind string
+
+const (
+	IndentKindSpaces IndentKind = "spaces"
+	IndentKindTabs   IndentKind = "tabs"
+)
+
 type Paths struct {
 	RootDir      string
 	SettingsFile string
 	ThemesDir    string
 }
 
+type SaveIndent struct {
+	Kind IndentKind `json:"kind"`
+	Size int        `json:"size,omitempty"`
+}
+
 type Settings struct {
-	Theme string `json:"theme"`
+	Theme           string     `json:"theme"`
+	WrapLongStrings bool       `json:"wrap_long_strings"`
+	SaveIndent      SaveIndent `json:"save_indent"`
 }
 
 func PathsFromUserConfigDir(userConfigDir string) Paths {
@@ -45,8 +59,50 @@ func ResolvePaths() (Paths, error) {
 	return PathsFromUserConfigDir(userConfigDir), nil
 }
 
+func DefaultSaveIndent() SaveIndent {
+	return SaveIndent{Kind: IndentKindSpaces, Size: 2}
+}
+
+func (i SaveIndent) WithDefaults() SaveIndent {
+	switch IndentKind(strings.ToLower(strings.TrimSpace(string(i.Kind)))) {
+	case "", IndentKindSpaces:
+		i.Kind = IndentKindSpaces
+		switch i.Size {
+		case 2, 3, 4:
+		default:
+			i.Size = 2
+		}
+	case IndentKindTabs:
+		i.Kind = IndentKindTabs
+		i.Size = 0
+	default:
+		return DefaultSaveIndent()
+	}
+	return i
+}
+
+func (i SaveIndent) String() string {
+	i = i.WithDefaults()
+	if i.Kind == IndentKindTabs {
+		return "\t"
+	}
+	return strings.Repeat(" ", i.Size)
+}
+
+func (i SaveIndent) Label() string {
+	i = i.WithDefaults()
+	if i.Kind == IndentKindTabs {
+		return "tabs"
+	}
+	return fmt.Sprintf("spaces:%d", i.Size)
+}
+
 func DefaultSettings() Settings {
-	return Settings{Theme: DefaultThemeName}
+	return Settings{
+		Theme:           DefaultThemeName,
+		WrapLongStrings: false,
+		SaveIndent:      DefaultSaveIndent(),
+	}
 }
 
 func (s Settings) WithDefaults() Settings {
@@ -54,6 +110,7 @@ func (s Settings) WithDefaults() Settings {
 	if s.Theme == "" {
 		s.Theme = DefaultThemeName
 	}
+	s.SaveIndent = s.SaveIndent.WithDefaults()
 	return s
 }
 

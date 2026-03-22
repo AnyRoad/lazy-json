@@ -29,6 +29,7 @@ type Model struct {
 	Session             *session.Session
 	ThemeRegistry       ThemeRegistry
 	Settings            config.Settings
+	ActiveSettings      config.Settings
 	SettingsPath        string
 	SettingsFilePresent bool
 	SettingsPersisted   bool
@@ -38,6 +39,7 @@ type Model struct {
 	prompt              textinput.Model
 	promptKind          promptKind
 	pendingPrefix       string
+	settingsRow         int
 	ExitOutput          []byte
 	JQRunner            integration.JQRunner
 	Clipboard           integration.Clipboard
@@ -110,6 +112,7 @@ func NewModel(doc *document.Document, src source.Input, options ModelOptions) *M
 		Session:             session.New(doc, src, opts.Settings.Theme),
 		ThemeRegistry:       opts.ThemeRegistry,
 		Settings:            opts.Settings,
+		ActiveSettings:      opts.Settings,
 		SettingsPath:        opts.SettingsPath,
 		SettingsFilePresent: opts.SettingsFilePresent,
 		SettingsPersisted:   opts.SettingsPersisted,

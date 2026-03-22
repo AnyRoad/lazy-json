@@ -86,7 +86,11 @@ func TestLoadSettingsReadFailureFallsBackToDefaults(t *testing.T) {
 
 func TestSaveAndLoadSettings(t *testing.T) {
 	paths := PathsFromUserConfigDir(t.TempDir())
-	want := Settings{Theme: "custom"}
+	want := Settings{
+		Theme:           "custom",
+		WrapLongStrings: true,
+		SaveIndent:      SaveIndent{Kind: IndentKindTabs},
+	}.WithDefaults()
 
 	if err := SaveSettings(paths.SettingsFile, want); err != nil {
 		t.Fatalf("SaveSettings() error = %v", err)
@@ -103,6 +107,41 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	data := string(readFile(t, paths.SettingsFile))
 	if !strings.Contains(data, "\"theme\": \"custom\"") {
 		t.Fatalf("settings file = %q, want persisted theme", data)
+	}
+	if !strings.Contains(data, "\"wrap_long_strings\": true") {
+		t.Fatalf("settings file = %q, want persisted wrap setting", data)
+	}
+	if !strings.Contains(data, "\"kind\": \"tabs\"") {
+		t.Fatalf("settings file = %q, want persisted tabs indent", data)
+	}
+}
+
+func TestLoadSettingsNormalizesInvalidSaveIndent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), SettingsFileName)
+	writeFile(t, path, []byte(`{"theme":"custom","save_indent":{"kind":"spaces","size":9}}`))
+
+	settings, warnings := LoadSettings(path)
+
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+	if got, want := settings.SaveIndent, DefaultSaveIndent(); got != want {
+		t.Fatalf("SaveIndent = %#v, want %#v", got, want)
+	}
+}
+
+func TestSaveIndentLabelAndString(t *testing.T) {
+	if got, want := (SaveIndent{Kind: IndentKindSpaces, Size: 3}).Label(), "spaces:3"; got != want {
+		t.Fatalf("Label() = %q, want %q", got, want)
+	}
+	if got, want := (SaveIndent{Kind: IndentKindSpaces, Size: 3}).String(), "   "; got != want {
+		t.Fatalf("String() = %q, want %q", got, want)
+	}
+	if got, want := (SaveIndent{Kind: IndentKindTabs}).Label(), "tabs"; got != want {
+		t.Fatalf("Label() = %q, want %q", got, want)
+	}
+	if got, want := (SaveIndent{Kind: IndentKindTabs}).String(), "\t"; got != want {
+		t.Fatalf("String() = %q, want %q", got, want)
 	}
 }
 

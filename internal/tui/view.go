@@ -42,13 +42,9 @@ func (m *Model) View() string {
 func (m *Model) documentView(theme Theme, width, height int) string {
 	bodyHeight := height - 2
 	if bodyHeight < 1 {
-		bodyHeight = len(m.Session.Rows)
+		bodyHeight = 1
 	}
-	start, end := visibleWindow(m.Session, bodyHeight)
-	lines := make([]string, 0, end-start+2)
-	for _, row := range m.Session.Rows[start:end] {
-		lines = append(lines, trimWidth(m.renderRow(row, theme), width))
-	}
+	lines := m.visibleDocumentLines(theme, width, bodyHeight)
 	lines = append(lines, trimWidth(m.renderFooter(theme), width))
 	if m.promptKind != promptNone {
 		lines = append(lines, trimWidth(theme.Prompt.Render(m.prompt.View()), width))
@@ -56,29 +52,70 @@ func (m *Model) documentView(theme Theme, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-func visibleWindow(s *session.Session, bodyHeight int) (int, int) {
-	if len(s.Rows) <= bodyHeight {
-		return 0, len(s.Rows)
+func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int) []string {
+	if len(m.Session.Rows) == 0 {
+		return nil
 	}
-	current, ok := s.RowIndex[s.SelectedID]
-	if !ok {
-		return 0, bodyHeight
+
+	rowLines := make([][]string, 0, len(m.Session.Rows))
+	totalLines := 0
+	selectedStart := 0
+	currentIndex, hasCurrent := m.Session.RowIndex[m.Session.SelectedID]
+
+	for index, row := range m.Session.Rows {
+		rendered := m.renderRowLines(row, theme, width)
+		if len(rendered) == 0 {
+			rendered = []string{""}
+		}
+		if hasCurrent && index == currentIndex {
+			selectedStart = totalLines
+		}
+		totalLines += len(rendered)
+		rowLines = append(rowLines, rendered)
 	}
-	start := current - bodyHeight/2
-	if start < 0 {
-		start = 0
+
+	if totalLines <= bodyHeight {
+		return flattenLines(rowLines)
 	}
-	end := start + bodyHeight
-	if end > len(s.Rows) {
-		end = len(s.Rows)
-		start = end - bodyHeight
+
+	top := selectedStart - bodyHeight/2
+	if top < 0 {
+		top = 0
 	}
-	return start, end
+	maxTop := totalLines - bodyHeight
+	if maxTop < 0 {
+		maxTop = 0
+	}
+	if top > maxTop {
+		top = maxTop
+	}
+
+	return sliceVisibleLines(rowLines, top, top+bodyHeight)
 }
 
 func (m *Model) renderRow(row session.Row, theme Theme) string {
+	lines := m.renderRowLines(row, theme, 0)
+	if len(lines) == 0 {
+		return ""
+	}
+	return lines[0]
+}
+
+func (m *Model) renderRowLines(row session.Row, theme Theme, width int) []string {
 	loc, _ := m.Doc.Find(row.NodeID)
 	node := loc.Node
+	label := renderRowLabel(row, theme)
+	if m.ActiveSettings.WithDefaults().WrapLongStrings && node.Kind == document.KindString {
+		return m.renderWrappedStringLines(row, theme, width, label, node.String)
+	}
+	line := label + renderNodeValue(node, theme) + theme.Muted.Render("  "+row.Path)
+	if width > 0 {
+		line = trimWidth(line, width)
+	}
+	return []string{m.decorateRowLine(row, theme, line)}
+}
+
+func renderRowLabel(row session.Row, theme Theme) string {
 	indent := strings.Repeat("  ", row.Depth)
 	marker := " "
 	if row.IsContainer {
@@ -95,8 +132,52 @@ func (m *Model) renderRow(row session.Row, theme Theme) string {
 	case row.ArrayIndex >= 0:
 		label += theme.Muted.Render(fmt.Sprintf("[%d]: ", row.ArrayIndex))
 	}
-	value := renderNodeValue(node, theme)
-	line := label + value + theme.Muted.Render("  "+row.Path)
+	return label
+}
+
+func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int, label, value string) []string {
+	valueText := fmt.Sprintf("%q", value)
+	if width <= 0 {
+		line := label + theme.String.Render(valueText) + theme.Muted.Render("  "+row.Path)
+		return []string{m.decorateRowLine(row, theme, line)}
+	}
+
+	labelWidth := lipgloss.Width(label)
+	wrapWidth := width - labelWidth
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
+	pathSuffix := "  " + row.Path
+	pathWidth := lipgloss.Width(pathSuffix)
+	parts := wrapText(valueText, wrapWidth)
+	if pathWidth < wrapWidth {
+		parts = wrapTextWithTrailingWidth(valueText, wrapWidth, wrapWidth-pathWidth)
+	}
+	continuationPrefix := strings.Repeat(" ", labelWidth)
+	lines := make([]string, 0, len(parts))
+	if len(parts) == 1 {
+		line := label + theme.String.Render(parts[0]) + theme.Muted.Render(pathSuffix)
+		return []string{m.decorateRowLine(row, theme, trimWidth(line, width))}
+	}
+	for index, part := range parts {
+		prefix := label
+		if index > 0 {
+			prefix = continuationPrefix
+		}
+		line := prefix + theme.String.Render(part)
+		if index == len(parts)-1 && pathWidth < wrapWidth {
+			line += theme.Muted.Render(pathSuffix)
+		}
+		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(line, width)))
+	}
+	if pathWidth >= wrapWidth {
+		pathPrefix := strings.Repeat("  ", row.Depth) + "  "
+		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(pathPrefix+theme.Muted.Render(row.Path), width)))
+	}
+	return lines
+}
+
+func (m *Model) decorateRowLine(row session.Row, theme Theme, line string) string {
 	if row.NodeID == m.Session.SelectedID {
 		return theme.Selected.Render(line)
 	}
@@ -178,6 +259,93 @@ func (m *Model) renderPrefixMenu(theme Theme, menu prefixMenu) string {
 		items = append(items, item.Key+":"+item.Label)
 	}
 	return theme.Help.Render("["+menu.Tag+"]") + " " + theme.Status.Render(strings.Join(items, " "))
+}
+
+func flattenLines(groups [][]string) []string {
+	lines := make([]string, 0)
+	for _, group := range groups {
+		lines = append(lines, group...)
+	}
+	return lines
+}
+
+func sliceVisibleLines(groups [][]string, start, end int) []string {
+	lines := make([]string, 0, end-start)
+	offset := 0
+	for _, group := range groups {
+		next := offset + len(group)
+		if next <= start {
+			offset = next
+			continue
+		}
+		if offset >= end {
+			break
+		}
+		from := 0
+		if start > offset {
+			from = start - offset
+		}
+		to := len(group)
+		if end < next {
+			to = end - offset
+		}
+		lines = append(lines, group[from:to]...)
+		offset = next
+	}
+	return lines
+}
+
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		return []string{text}
+	}
+	lines := make([]string, 0, 1)
+	var current strings.Builder
+	currentWidth := 0
+	for _, r := range text {
+		runeWidth := lipgloss.Width(string(r))
+		if current.Len() > 0 && currentWidth+runeWidth > width {
+			lines = append(lines, current.String())
+			current.Reset()
+			currentWidth = 0
+		}
+		current.WriteRune(r)
+		currentWidth += runeWidth
+	}
+	if current.Len() > 0 || len(lines) == 0 {
+		lines = append(lines, current.String())
+	}
+	return lines
+}
+
+func wrapTextWithTrailingWidth(text string, width, trailingWidth int) []string {
+	if width <= 0 || trailingWidth <= 0 || trailingWidth >= width {
+		return wrapText(text, width)
+	}
+	if lipgloss.Width(text) <= trailingWidth {
+		return []string{text}
+	}
+	prefix, trailing := splitSuffixByWidth(text, trailingWidth)
+	lines := wrapText(prefix, width)
+	return append(lines, trailing)
+}
+
+func splitSuffixByWidth(text string, width int) (string, string) {
+	if width <= 0 {
+		return text, ""
+	}
+	runes := []rune(text)
+	split := len(runes)
+	currentWidth := 0
+	for split > 0 {
+		runeWidth := lipgloss.Width(string(runes[split-1]))
+		if currentWidth+runeWidth > width {
+			break
+		}
+		currentWidth += runeWidth
+		split--
+	}
+	return string(runes[:split]), string(runes[split:])
 }
 
 func trimWidth(s string, width int) string {

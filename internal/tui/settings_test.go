@@ -31,7 +31,7 @@ func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) 
 	if got, want := m.Session.Mode, "settings"; string(got) != want {
 		t.Fatalf("Mode = %q, want %q", got, want)
 	}
-	if view := m.View(); !strings.Contains(view, "Theme Settings") {
+	if view := m.View(); !strings.Contains(view, "Settings") {
 		t.Fatalf("View() = %q, want settings overlay", view)
 	}
 
@@ -96,7 +96,7 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed after save, want open")
 	}
-	if got, want := m.Session.Status, `saved theme "`+nextTheme+`"`; got != want {
+	if got, want := m.Session.Status, "saved settings"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
 	}
 
@@ -124,6 +124,8 @@ func TestSettingsSaveFailureKeepsDialogOpen(t *testing.T) {
 	m = updated.(*Model)
 	updated, _ = m.Update(key("l"))
 	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
 	updated, _ = m.Update(key("s"))
 	m = updated.(*Model)
 
@@ -146,8 +148,6 @@ func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
 	selectedBefore := m.Session.SelectedID
 
 	updated, _ := m.Update(key("S"))
-	m = updated.(*Model)
-	updated, _ = m.Update(key("j"))
 	m = updated.(*Model)
 	updated, _ = m.Update(specialKey(tea.KeyLeft))
 	m = updated.(*Model)
