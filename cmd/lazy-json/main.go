@@ -21,11 +21,21 @@ func main() {
 	}
 }
 
+type startupArgs struct {
+	SelectPath string
+	InputArgs  []string
+}
+
 func run(args []string) error {
-	input, err := source.Load(args, os.Stdin)
+	startup, err := parseStartupArgs(args)
+	if err != nil {
+		return err
+	}
+
+	input, err := source.Load(startup.InputArgs, os.Stdin)
 	if err != nil {
 		if errors.Is(err, source.ErrNoInput) {
-			return fmt.Errorf("usage: lazy-json <file.json> or cat file.json | lazy-json")
+			return fmt.Errorf("usage: lazy-json [--select <path>] <file.json> or cat file.json | lazy-json [--select <path>]")
 		}
 		return err
 	}
@@ -36,6 +46,9 @@ func run(args []string) error {
 	}
 
 	model := tui.NewModel(doc, input, loadModelOptions())
+	if err := applyStartupSelection(model, startup.SelectPath); err != nil {
+		return err
+	}
 	opts := []tea.ProgramOption{}
 	if input.Kind == source.KindStdin {
 		opts = append(opts, tea.WithInputTTY())
@@ -54,6 +67,75 @@ func run(args []string) error {
 			return fmt.Errorf("write stdout: %w", err)
 		}
 	}
+	return nil
+}
+
+func parseStartupArgs(args []string) (startupArgs, error) {
+	parsed := startupArgs{InputArgs: make([]string, 0, len(args))}
+
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		switch {
+		case arg == "--":
+			parsed.InputArgs = append(parsed.InputArgs, args[index+1:]...)
+			return parsed, nil
+		case arg == "--select":
+			if parsed.SelectPath != "" {
+				return startupArgs{}, fmt.Errorf("--select may only be provided once")
+			}
+			if index+1 >= len(args) {
+				return startupArgs{}, fmt.Errorf("--select requires a JSON path")
+			}
+			nextArg := args[index+1]
+			switch {
+			case nextArg == "--select" || strings.HasPrefix(nextArg, "--select="):
+				return startupArgs{}, fmt.Errorf("--select may only be provided once")
+			case strings.HasPrefix(nextArg, "--"):
+				return startupArgs{}, fmt.Errorf("--select requires a JSON path")
+			}
+			value := strings.TrimSpace(nextArg)
+			if value == "" {
+				return startupArgs{}, fmt.Errorf("--select requires a JSON path")
+			}
+			parsed.SelectPath = value
+			index++
+		case strings.HasPrefix(arg, "--select="):
+			if parsed.SelectPath != "" {
+				return startupArgs{}, fmt.Errorf("--select may only be provided once")
+			}
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--select="))
+			if value == "" {
+				return startupArgs{}, fmt.Errorf("--select requires a JSON path")
+			}
+			parsed.SelectPath = value
+		default:
+			parsed.InputArgs = append(parsed.InputArgs, arg)
+		}
+	}
+
+	return parsed, nil
+}
+
+func applyStartupSelection(model *tui.Model, selectPath string) error {
+	selectPath = strings.TrimSpace(selectPath)
+	if selectPath == "" {
+		return nil
+	}
+
+	resolution, err := model.Doc.ResolvePath(selectPath)
+	if err != nil {
+		return fmt.Errorf("invalid select path: %w", err)
+	}
+
+	model.Session.RevealSelection(model.Doc, resolution.NodeID, resolution.Ancestors)
+	if resolution.Exact {
+		return nil
+	}
+	if resolution.MatchedPath == "$" {
+		model.Session.SetError(fmt.Sprintf("select path not found: %s; opened root $", selectPath))
+		return nil
+	}
+	model.Session.SetStatus(fmt.Sprintf("select path not found: %s; opened nearest existing ancestor %s", selectPath, resolution.MatchedPath))
 	return nil
 }
 

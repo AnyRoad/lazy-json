@@ -69,6 +69,12 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 	snippets := []string{
 		"- `t`: quick-preview the next theme for the current session",
 		"- `S`: open the theme settings dialog",
+		"### Open a file with a startup selection",
+		"lazy-json --select '$.items[0].name' data.json",
+		"### Open stdin with a startup selection",
+		"cat data.json | lazy-json --select '$.items[0].name'",
+		"You can add `--select '$.path.to.node'` to either startup form to open with a specific node selected.",
+		"If the full path does not exist, `lazy-json` falls back to the nearest existing ancestor; if only `$` exists, it still opens and shows an error in the footer.",
 		"- `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found",
 		"- `zR` / `zM`: expand all containers / collapse all containers except the root",
 		"- `yp`: copy the selected JSON path",

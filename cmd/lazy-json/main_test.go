@@ -15,6 +15,172 @@ import (
 	"github.com/anyroad/lazy-json/internal/tui"
 )
 
+func TestParseStartupArgs(t *testing.T) {
+	testCases := []struct {
+		name       string
+		args       []string
+		wantPath   string
+		wantInputs []string
+		wantErr    string
+	}{
+		{
+			name:       "file only",
+			args:       []string{"sample.json"},
+			wantInputs: []string{"sample.json"},
+		},
+		{
+			name:       "select before file",
+			args:       []string{"--select", "$.items[0].title", "sample.json"},
+			wantPath:   "$.items[0].title",
+			wantInputs: []string{"sample.json"},
+		},
+		{
+			name:       "select after file",
+			args:       []string{"sample.json", "--select", "$.items[0].title"},
+			wantPath:   "$.items[0].title",
+			wantInputs: []string{"sample.json"},
+		},
+		{
+			name:       "select equals",
+			args:       []string{"--select=$.items[0].title"},
+			wantPath:   "$.items[0].title",
+			wantInputs: nil,
+		},
+		{
+			name:       "end of flags preserves filename",
+			args:       []string{"--", "--select=sample.json"},
+			wantInputs: []string{"--select=sample.json"},
+		},
+		{
+			name:       "end of flags after select preserves filename",
+			args:       []string{"--select", "$.items[0].title", "--", "--select"},
+			wantPath:   "$.items[0].title",
+			wantInputs: []string{"--select"},
+		},
+		{
+			name:    "missing value",
+			args:    []string{"--select"},
+			wantErr: "--select requires a JSON path",
+		},
+		{
+			name:    "missing value before another flag",
+			args:    []string{"--select", "--other", "sample.json"},
+			wantErr: "--select requires a JSON path",
+		},
+		{
+			name:    "duplicate",
+			args:    []string{"--select", "$.name", "--select=$.items"},
+			wantErr: "--select may only be provided once",
+		},
+		{
+			name:    "duplicate before value",
+			args:    []string{"--select", "--select=$.items", "sample.json"},
+			wantErr: "--select may only be provided once",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			parsed, err := parseStartupArgs(testCase.args)
+			if testCase.wantErr != "" {
+				if err == nil {
+					t.Fatalf("parseStartupArgs(%v) error = nil, want %q", testCase.args, testCase.wantErr)
+				}
+				if got := err.Error(); got != testCase.wantErr {
+					t.Fatalf("error = %q, want %q", got, testCase.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseStartupArgs(%v) error = %v", testCase.args, err)
+			}
+			if got, want := parsed.SelectPath, testCase.wantPath; got != want {
+				t.Fatalf("SelectPath = %q, want %q", got, want)
+			}
+			if got, want := parsed.InputArgs, testCase.wantInputs; len(got) != len(want) {
+				t.Fatalf("InputArgs = %v, want %v", got, want)
+			} else {
+				for index := range want {
+					if got[index] != want[index] {
+						t.Fatalf("InputArgs[%d] = %q, want %q", index, got[index], want[index])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestApplyStartupSelection(t *testing.T) {
+	model := newNestedTestModel(t)
+
+	if err := applyStartupSelection(model, "$.items[0].title"); err != nil {
+		t.Fatalf("applyStartupSelection() error = %v", err)
+	}
+	if got, want := model.Session.SelectedID, model.Doc.Root.Object[0].Value.Array[0].Object[0].Value.ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if !model.Session.Expanded[model.Doc.Root.Object[0].Value.ID] {
+		t.Fatal("items container is not expanded")
+	}
+	if !model.Session.Expanded[model.Doc.Root.Object[0].Value.Array[0].ID] {
+		t.Fatal("first array item is not expanded")
+	}
+	if got := model.Session.Status; got != "" {
+		t.Fatalf("Status = %q, want empty on exact match", got)
+	}
+	if got := model.Session.Error; got != "" {
+		t.Fatalf("Error = %q, want empty on exact match", got)
+	}
+}
+
+func TestApplyStartupSelectionFallbackMessages(t *testing.T) {
+	t.Run("nearest ancestor", func(t *testing.T) {
+		model := newNestedTestModel(t)
+
+		if err := applyStartupSelection(model, "$.items[99].title"); err != nil {
+			t.Fatalf("applyStartupSelection() error = %v", err)
+		}
+		if got, want := model.Session.SelectedID, model.Doc.Root.Object[0].Value.ID; got != want {
+			t.Fatalf("SelectedID = %d, want %d", got, want)
+		}
+		if got, want := model.Session.Status, "select path not found: $.items[99].title; opened nearest existing ancestor $.items"; got != want {
+			t.Fatalf("Status = %q, want %q", got, want)
+		}
+		if got := model.Session.Error; got != "" {
+			t.Fatalf("Error = %q, want empty for ancestor fallback", got)
+		}
+	})
+
+	t.Run("root only", func(t *testing.T) {
+		model := newNestedTestModel(t)
+
+		if err := applyStartupSelection(model, "$.missing.branch"); err != nil {
+			t.Fatalf("applyStartupSelection() error = %v", err)
+		}
+		if got, want := model.Session.SelectedID, model.Doc.Root.ID; got != want {
+			t.Fatalf("SelectedID = %d, want %d", got, want)
+		}
+		if got, want := model.Session.Error, "select path not found: $.missing.branch; opened root $"; got != want {
+			t.Fatalf("Error = %q, want %q", got, want)
+		}
+		if got := model.Session.Status; got != "" {
+			t.Fatalf("Status = %q, want empty for root fallback", got)
+		}
+	})
+}
+
+func TestApplyStartupSelectionRejectsMalformedPath(t *testing.T) {
+	model := newNestedTestModel(t)
+
+	err := applyStartupSelection(model, "$.items[")
+	if err == nil {
+		t.Fatal("applyStartupSelection() error = nil")
+	}
+	if !strings.Contains(err.Error(), "invalid select path") {
+		t.Fatalf("error = %q, want invalid select path prefix", err.Error())
+	}
+}
+
 func TestLoadModelOptionsFromPathsUsesPersistedTheme(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
 	writeTestFile(t, paths.SettingsFile, []byte("{\n  \"theme\": \"mist\"\n}\n"))
@@ -281,6 +447,15 @@ func newTestModel(t *testing.T, options tui.ModelOptions) *tui.Model {
 		t.Fatal(err)
 	}
 	return tui.NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, options)
+}
+
+func newNestedTestModel(t *testing.T) *tui.Model {
+	t.Helper()
+	doc, err := document.Parse([]byte(`{"items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tui.NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, tui.ModelOptions{})
 }
 
 func writeTestFile(t *testing.T, path string, data []byte) {

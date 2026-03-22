@@ -203,6 +203,23 @@ func (s *Session) CollapseAll(doc *document.Document) {
 	}
 }
 
+func (s *Session) RevealSelection(doc *document.Document, nodeID document.NodeID, ancestors []document.NodeID) {
+	if doc == nil || doc.Root == nil || nodeID == 0 {
+		return
+	}
+	if s.Expanded == nil {
+		s.Expanded = make(map[document.NodeID]bool)
+	}
+	if doc.Root.IsContainer() {
+		s.Expanded[doc.Root.ID] = true
+	}
+	for _, ancestor := range ancestors {
+		s.Expanded[ancestor] = true
+	}
+	s.SelectedID = nodeID
+	s.Refresh(doc)
+}
+
 func (s *Session) NextParentSibling(doc *document.Document) bool {
 	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
 		return false

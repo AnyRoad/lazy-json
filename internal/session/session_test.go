@@ -132,3 +132,46 @@ func TestNextParentSiblingClimbsAncestors(t *testing.T) {
 		t.Fatal("NextParentSibling() = true, want false at end of document")
 	}
 }
+
+func TestRevealSelectionExpandsAncestorsForDeepNode(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	targetID := doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+
+	s.RevealSelection(doc, targetID, []document.NodeID{
+		doc.Root.ID,
+		doc.Root.Object[1].Value.ID,
+		doc.Root.Object[1].Value.Array[0].ID,
+	})
+
+	if got, want := s.SelectedID, targetID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if !s.Expanded[doc.Root.Object[1].Value.ID] {
+		t.Fatal("items container is not expanded")
+	}
+	if !s.Expanded[doc.Root.Object[1].Value.Array[0].ID] {
+		t.Fatal("first array item is not expanded")
+	}
+	if got := s.Rows[4].Path; got != "$.items[0].title" {
+		t.Fatalf("path = %q, want $.items[0].title", got)
+	}
+}
+
+func TestRevealSelectionKeepsSelectedContainerCollapsed(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	targetID := doc.Root.Object[1].Value.ID
+
+	s.RevealSelection(doc, targetID, []document.NodeID{doc.Root.ID})
+
+	if got, want := s.SelectedID, targetID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if s.Expanded[targetID] {
+		t.Fatal("selected container was expanded, want collapsed")
+	}
+	if got, want := len(s.Rows), 3; got != want {
+		t.Fatalf("rows = %d, want %d with selected container collapsed", got, want)
+	}
+}

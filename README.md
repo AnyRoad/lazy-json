@@ -43,10 +43,22 @@ go build -o dist/lazy-json ./cmd/lazy-json
 lazy-json data.json
 ```
 
+### Open a file with a startup selection
+
+```bash
+lazy-json --select '$.items[0].name' data.json
+```
+
 ### Open JSON from stdin
 
 ```bash
 cat data.json | lazy-json
+```
+
+### Open stdin with a startup selection
+
+```bash
+cat data.json | lazy-json --select '$.items[0].name'
 ```
 
 ### Optional tools
@@ -64,6 +76,8 @@ cat data.json | lazy-json
 - stdin-backed: `cat data.json | lazy-json`
 
 File-backed sessions save back to the original path with `:w`. Stdin-backed sessions do not have a default file target, so use `:w path.json` to save to disk or `:print` to write the current document to stdout.
+
+You can add `--select '$.path.to.node'` to either startup form to open with a specific node selected. The accepted syntax matches the paths shown in the tree, such as `$.items[0].name` and `$["two words"]`. If the full path does not exist, `lazy-json` falls back to the nearest existing ancestor; if only `$` exists, it still opens and shows an error in the footer.
 
 ### Navigation
 
