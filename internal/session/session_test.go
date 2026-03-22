@@ -64,19 +64,23 @@ func TestCollapseAndReselectVisible(t *testing.T) {
 func TestSearchHits(t *testing.T) {
 	doc := testDoc(t)
 	s := New(doc, source.Input{Kind: source.KindFile}, "")
-	itemsID := doc.Root.Object[1].Value.ID
-	s.Expanded[itemsID] = true
-	s.Expanded[doc.Root.Object[1].Value.Array[0].ID] = true
-	s.Refresh(doc)
 	s.Search.Query = "alpha"
-	s.UpdateSearchHits()
+	s.UpdateSearchHits(doc)
 	if len(s.SearchHits) != 1 {
 		t.Fatalf("SearchHits = %d, want 1", len(s.SearchHits))
 	}
 	s.SelectedID = doc.Root.ID
-	s.NextSearchHit(false)
+	if !s.NextSearchHit(doc, false) {
+		t.Fatal("NextSearchHit() = false, want true")
+	}
 	if s.SelectedID != s.SearchHits[0] {
 		t.Fatalf("SelectedID = %d, want %d", s.SelectedID, s.SearchHits[0])
+	}
+	if !s.Expanded[doc.Root.Object[1].Value.ID] {
+		t.Fatal("items container is not expanded after search reveal")
+	}
+	if !s.Expanded[doc.Root.Object[1].Value.Array[0].ID] {
+		t.Fatal("first array item is not expanded after search reveal")
 	}
 }
 

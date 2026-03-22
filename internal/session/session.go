@@ -295,6 +295,15 @@ func (s *Session) RevealSelection(doc *document.Document, nodeID document.NodeID
 	s.Refresh(doc)
 }
 
+func (s *Session) RevealNode(doc *document.Document, nodeID document.NodeID) bool {
+	ancestors, ok := nodeAncestors(doc, nodeID)
+	if !ok {
+		return false
+	}
+	s.RevealSelection(doc, nodeID, ancestors)
+	return true
+}
+
 func (s *Session) NextParentSibling(doc *document.Document) bool {
 	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
 		return false
@@ -342,18 +351,19 @@ func (s *Session) ClearMessages() {
 	s.Error = ""
 }
 
-func (s *Session) NextSearchHit(reverse bool) {
+func (s *Session) NextSearchHit(doc *document.Document, reverse bool) bool {
 	if len(s.SearchHits) == 0 {
-		return
+		return false
 	}
 	current := slices.Index(s.SearchHits, s.SelectedID)
+	targetID := document.NodeID(0)
 	if current == -1 {
 		if reverse {
-			s.SelectedID = s.SearchHits[len(s.SearchHits)-1]
+			targetID = s.SearchHits[len(s.SearchHits)-1]
 		} else {
-			s.SelectedID = s.SearchHits[0]
+			targetID = s.SearchHits[0]
 		}
-		return
+		return s.RevealNode(doc, targetID)
 	}
 	if reverse {
 		current--
@@ -366,5 +376,27 @@ func (s *Session) NextSearchHit(reverse bool) {
 			current = 0
 		}
 	}
-	s.SelectedID = s.SearchHits[current]
+	targetID = s.SearchHits[current]
+	return s.RevealNode(doc, targetID)
+}
+
+func nodeAncestors(doc *document.Document, nodeID document.NodeID) ([]document.NodeID, bool) {
+	if doc == nil || doc.Root == nil || nodeID == 0 {
+		return nil, false
+	}
+	ancestors := make([]document.NodeID, 0, 4)
+	currentID := nodeID
+	for currentID != 0 {
+		loc, ok := doc.Find(currentID)
+		if !ok {
+			return nil, false
+		}
+		if loc.Parent == nil {
+			break
+		}
+		ancestors = append(ancestors, loc.Parent.ID)
+		currentID = loc.Parent.ID
+	}
+	slices.Reverse(ancestors)
+	return ancestors, true
 }

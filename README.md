@@ -121,7 +121,7 @@ All clipboard copies use structured JSON output rather than the rendered screen 
 - `n`: jump to the next match
 - `N`: jump to the previous match
 
-Search matches visible rows based on keys, scalar values, and rendered JSON paths. If a subtree is collapsed, rows hidden inside that subtree are not searchable until expanded.
+Search matches nodes across the whole document based on keys, scalar values, and rendered JSON paths. When `n` or `N` lands on a match inside a collapsed subtree, `lazy-json` automatically expands the necessary ancestors to reveal it.
 
 ### Commands
 
@@ -254,6 +254,5 @@ git push origin v0.1.0
 ## Current Limitations
 
 - saves always rewrite canonical JSON formatting
-- search only indexes visible rows
 - `jq` is optional; commands fail cleanly when it is missing
 - `$EDITOR` is optional; external edit fails cleanly when it is not configured

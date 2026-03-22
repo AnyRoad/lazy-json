@@ -273,9 +273,9 @@ func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
 	case "d":
 		return m, m.deleteSelected()
 	case "n":
-		m.Session.NextSearchHit(false)
+		m.Session.NextSearchHit(m.Doc, false)
 	case "N":
-		m.Session.NextSearchHit(true)
+		m.Session.NextSearchHit(m.Doc, true)
 	case "t":
 		m.cycleTheme()
 	case "S":
@@ -421,7 +421,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 
 func (m *Model) refresh() {
 	m.Session.Refresh(m.Doc)
-	m.Session.UpdateSearchHits()
+	m.Session.UpdateSearchHits(m.Doc)
 }
 
 func (m *Model) Summary() string {

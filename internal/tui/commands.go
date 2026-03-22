@@ -93,12 +93,15 @@ func (m *Model) submitPrompt() tea.Cmd {
 		return m.handleCommand(value)
 	case promptSearch:
 		m.Session.Search.Query = value
-		m.Session.UpdateSearchHits()
+		m.Session.UpdateSearchHits(m.Doc)
 		if len(m.Session.SearchHits) == 0 {
 			m.Session.SetError("no search results")
 			return nil
 		}
-		m.Session.SelectedID = m.Session.SearchHits[0]
+		if !m.Session.RevealNode(m.Doc, m.Session.SearchHits[0]) {
+			m.Session.SetError("search result not found")
+			return nil
+		}
 		m.Session.SetStatus(fmt.Sprintf("%d matches", len(m.Session.SearchHits)))
 		return nil
 	case promptEditScalar:

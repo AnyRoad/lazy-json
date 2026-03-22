@@ -342,8 +342,30 @@ func TestDeleteAndSearch(t *testing.T) {
 	m.openPrompt(promptSearch, "/ ", "")
 	m.prompt.SetValue("items")
 	runCmd(t, m, m.submitPrompt())
-	if len(m.Session.SearchHits) != 1 {
-		t.Fatalf("SearchHits = %d", len(m.Session.SearchHits))
+	if got, want := len(m.Session.SearchHits), 3; got != want {
+		t.Fatalf("SearchHits = %d, want %d", got, want)
+	}
+}
+
+func TestSearchRevealsCollapsedMatchOnSubmitAndNavigate(t *testing.T) {
+	m := testModel(t)
+
+	m.openPrompt(promptSearch, "/ ", "")
+	m.prompt.SetValue("[0]")
+	runCmd(t, m, m.submitPrompt())
+
+	firstItemID := m.Doc.Root.Object[1].Value.Array[0].ID
+	if got, want := m.Session.SelectedID, firstItemID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if !m.Session.Expanded[m.Doc.Root.Object[1].Value.ID] {
+		t.Fatal("items container is not expanded after search submit")
+	}
+
+	updated, _ := m.Update(key("N"))
+	m = updated.(*Model)
+	if got, want := m.Session.SelectedID, firstItemID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after N", got, want)
 	}
 }
 

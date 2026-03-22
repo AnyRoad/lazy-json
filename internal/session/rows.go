@@ -73,6 +73,10 @@ func joinPath(parentID document.NodeID, key string, arrayIndex int, rows *[]Row)
 			break
 		}
 	}
+	return appendRowPath(parentPath, key, arrayIndex)
+}
+
+func appendRowPath(parentPath, key string, arrayIndex int) string {
 	if arrayIndex >= 0 {
 		return fmt.Sprintf("%s[%d]", parentPath, arrayIndex)
 	}
