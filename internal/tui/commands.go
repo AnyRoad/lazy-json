@@ -309,6 +309,26 @@ func (m *Model) expandAll() tea.Cmd {
 	return nil
 }
 
+func (m *Model) expandArrayElementsOneLevel() tea.Cmd {
+	if !m.Session.ExpandNearestArrayOneLevel(m.Doc) {
+		m.Session.SetError("no array target available")
+		return nil
+	}
+	m.refresh()
+	m.Session.SetStatus("expanded array elements one level")
+	return nil
+}
+
+func (m *Model) collapseArrayElements() tea.Cmd {
+	if !m.Session.CollapseNearestArrayElements(m.Doc) {
+		m.Session.SetError("no array target available")
+		return nil
+	}
+	m.refresh()
+	m.Session.SetStatus("collapsed array elements")
+	return nil
+}
+
 func (m *Model) collapseAll() tea.Cmd {
 	m.Session.CollapseAll(m.Doc)
 	m.refresh()

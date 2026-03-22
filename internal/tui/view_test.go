@@ -177,7 +177,7 @@ func TestViewShowsPrefixMenus(t *testing.T) {
 	}{
 		{name: "go", prefix: "g", want: "[g:go] g:top"},
 		{name: "copy", prefix: "y", want: "[y:copy] p:path k:key v:value s:subtree j:json"},
-		{name: "fold", prefix: "z", want: "[z:fold] R:expand-all M:collapse-all"},
+		{name: "fold", prefix: "z", want: "[z:fold] R:expand-all M:collapse-all a:array+1 A:array-1"},
 		{name: "jump", prefix: "]", want: "[jump] p:parent-sibling"},
 	}
 

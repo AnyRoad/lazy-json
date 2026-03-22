@@ -94,6 +94,8 @@ var prefixMenus = map[string]prefixMenu{
 		Items: []prefixMenuItem{
 			{Key: "R", Label: "expand-all", Run: func(m *Model) tea.Cmd { return m.expandAll() }},
 			{Key: "M", Label: "collapse-all", Run: func(m *Model) tea.Cmd { return m.collapseAll() }},
+			{Key: "a", Label: "array+1", Run: func(m *Model) tea.Cmd { return m.expandArrayElementsOneLevel() }},
+			{Key: "A", Label: "array-1", Run: func(m *Model) tea.Cmd { return m.collapseArrayElements() }},
 		},
 	},
 	"]": {

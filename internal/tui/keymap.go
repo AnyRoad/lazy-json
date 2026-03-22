@@ -6,6 +6,8 @@ const helpText = `Navigation
   gg / G    top / bottom
   ]p        next parent sibling
   zR / zM   expand all / collapse all
+  za        expand array elements one level
+  zA        collapse array elements
   / n N     search
 
 Editing

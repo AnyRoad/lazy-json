@@ -24,6 +24,12 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, "zR / zM   expand all / collapse all") {
 		t.Fatalf("helpView() = %q, want expand/collapse all shortcuts", help)
 	}
+	if !strings.Contains(help, "za        expand array elements one level") {
+		t.Fatalf("helpView() = %q, want array expansion shortcut", help)
+	}
+	if !strings.Contains(help, "zA        collapse array elements") {
+		t.Fatalf("helpView() = %q, want array collapse shortcut", help)
+	}
 	if !strings.Contains(help, "yp        copy JSON path") {
 		t.Fatalf("helpView() = %q, want copy path shortcut", help)
 	}
@@ -89,6 +95,8 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"If the full path does not exist, `lazy-json` falls back to the nearest existing ancestor; if only `$` exists, it still opens and shows an error in the footer.",
 		"- `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found",
 		"- `zR` / `zM`: expand all containers / collapse all containers except the root",
+		"- `za`: expand the selected array, or nearest array ancestor, so each container element opens one level",
+		"- `zA`: collapse the selected array, or nearest array ancestor, so all element containers close",
 		"- `yp`: copy the selected JSON path",
 		"- `yk`: copy the selected object key",
 		"- `yv`: copy the selected value as compact JSON",

@@ -567,6 +567,36 @@ func TestGoFoldAndJumpPrefixShortcuts(t *testing.T) {
 		Clipboard: &stubClipboard{},
 	})
 
+	m.Session.SelectedID = doc.Root.Object[1].Value.ID
+	updated, cmd = m.Update(key("z"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	updated, cmd = m.Update(key("a"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := len(m.Session.Rows), 8; got != want {
+		t.Fatalf("rows = %d, want %d after za", got, want)
+	}
+	if got, want := m.Session.Status, "expanded array elements one level"; got != want {
+		t.Fatalf("Status = %q, want %q after za", got, want)
+	}
+	m.Session.SelectedID = doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+	updated, cmd = m.Update(key("z"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	updated, cmd = m.Update(key("A"))
+	m = updated.(*Model)
+	runCmd(t, m, cmd)
+	if got, want := len(m.Session.Rows), 6; got != want {
+		t.Fatalf("rows = %d, want %d after zA", got, want)
+	}
+	if got, want := m.Session.SelectedID, doc.Root.Object[1].Value.Array[0].ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after zA", got, want)
+	}
+	if got, want := m.Session.Status, "collapsed array elements"; got != want {
+		t.Fatalf("Status = %q, want %q after zA", got, want)
+	}
+
 	runCmd(t, m, m.expandAll())
 	m.Session.SelectedID = doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
 
@@ -585,6 +615,26 @@ func TestGoFoldAndJumpPrefixShortcuts(t *testing.T) {
 	}
 	if got, want := m.Session.Status, "moved to next parent sibling"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
+	}
+}
+
+func TestExpandArrayElementsOneLevelRequiresArrayContext(t *testing.T) {
+	m := testModel(t)
+
+	runCmd(t, m, m.expandArrayElementsOneLevel())
+
+	if got, want := m.Session.Error, "no array target available"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+}
+
+func TestCollapseArrayElementsRequiresArrayContext(t *testing.T) {
+	m := testModel(t)
+
+	runCmd(t, m, m.collapseArrayElements())
+
+	if got, want := m.Session.Error, "no array target available"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
 	}
 }
 

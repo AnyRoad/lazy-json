@@ -103,6 +103,122 @@ func TestExpandAllAndCollapseAll(t *testing.T) {
 	}
 }
 
+func TestExpandNearestArrayOneLevel(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	items := doc.Root.Object[1].Value
+	s.SelectedID = items.ID
+
+	if !s.ExpandNearestArrayOneLevel(doc) {
+		t.Fatal("ExpandNearestArrayOneLevel() = false, want true on selected array")
+	}
+	s.Refresh(doc)
+
+	if !s.Expanded[items.ID] {
+		t.Fatal("items array is not expanded")
+	}
+	if !s.Expanded[items.Array[0].ID] {
+		t.Fatal("first array element is not expanded")
+	}
+	if !s.Expanded[items.Array[1].ID] {
+		t.Fatal("second array element is not expanded")
+	}
+	if got, want := len(s.Rows), 7; got != want {
+		t.Fatalf("rows = %d, want %d after one-level array expansion", got, want)
+	}
+}
+
+func TestExpandNearestArrayOneLevelUsesNearestArrayAncestor(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	items := doc.Root.Object[1].Value
+	s.Expanded[items.ID] = true
+	s.Expanded[items.Array[0].ID] = true
+	s.SelectedID = items.Array[0].Object[0].Value.ID
+	s.Refresh(doc)
+
+	if !s.ExpandNearestArrayOneLevel(doc) {
+		t.Fatal("ExpandNearestArrayOneLevel() = false, want true inside array descendant")
+	}
+	s.Refresh(doc)
+
+	if !s.Expanded[items.Array[1].ID] {
+		t.Fatal("second array element is not expanded from nearest array ancestor")
+	}
+	if got, want := len(s.Rows), 7; got != want {
+		t.Fatalf("rows = %d, want %d after nearest-array expansion", got, want)
+	}
+}
+
+func TestCollapseNearestArrayElements(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	items := doc.Root.Object[1].Value
+	s.SelectedID = items.ID
+	s.ExpandNearestArrayOneLevel(doc)
+	s.Refresh(doc)
+
+	if !s.CollapseNearestArrayElements(doc) {
+		t.Fatal("CollapseNearestArrayElements() = false, want true on selected array")
+	}
+	s.Refresh(doc)
+
+	if !s.Expanded[items.ID] {
+		t.Fatal("items array is not expanded")
+	}
+	if s.Expanded[items.Array[0].ID] {
+		t.Fatal("first array element is expanded, want collapsed")
+	}
+	if s.Expanded[items.Array[1].ID] {
+		t.Fatal("second array element is expanded, want collapsed")
+	}
+	if got, want := len(s.Rows), 5; got != want {
+		t.Fatalf("rows = %d, want %d after collapsing array elements", got, want)
+	}
+}
+
+func TestCollapseNearestArrayElementsUsesNearestArrayAncestor(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	items := doc.Root.Object[1].Value
+	s.SelectedID = items.ID
+	s.ExpandNearestArrayOneLevel(doc)
+	s.SelectedID = items.Array[0].Object[0].Value.ID
+	s.Refresh(doc)
+
+	if !s.CollapseNearestArrayElements(doc) {
+		t.Fatal("CollapseNearestArrayElements() = false, want true inside array descendant")
+	}
+	s.Refresh(doc)
+
+	if got, want := s.SelectedID, items.Array[0].ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d after collapsing to visible ancestor", got, want)
+	}
+	if s.Expanded[items.Array[0].ID] || s.Expanded[items.Array[1].ID] {
+		t.Fatal("array elements remain expanded, want collapsed")
+	}
+}
+
+func TestCollapseNearestArrayElementsRejectsMissingArrayContext(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	s.SelectedID = doc.Root.Object[0].Value.ID
+
+	if s.CollapseNearestArrayElements(doc) {
+		t.Fatal("CollapseNearestArrayElements() = true, want false outside array context")
+	}
+}
+
+func TestExpandNearestArrayOneLevelRejectsMissingArrayContext(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	s.SelectedID = doc.Root.Object[0].Value.ID
+
+	if s.ExpandNearestArrayOneLevel(doc) {
+		t.Fatal("ExpandNearestArrayOneLevel() = true, want false outside array context")
+	}
+}
+
 func TestNextParentSiblingClimbsAncestors(t *testing.T) {
 	doc := testDocWithSiblingBranches(t)
 	s := New(doc, source.Input{Kind: source.KindFile}, "")

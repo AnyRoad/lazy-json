@@ -176,6 +176,46 @@ func (s *Session) ExpandAll(doc *document.Document) {
 	expandAllContainers(doc.Root, s.Expanded)
 }
 
+func (s *Session) ExpandNearestArrayOneLevel(doc *document.Document) bool {
+	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
+		return false
+	}
+
+	target, ok := nearestArrayTarget(doc, s.SelectedID)
+	if !ok {
+		return false
+	}
+	if s.Expanded == nil {
+		s.Expanded = make(map[document.NodeID]bool)
+	}
+	s.Expanded[target.ID] = true
+	for _, child := range target.Array {
+		if child != nil && child.IsContainer() {
+			s.Expanded[child.ID] = true
+		}
+	}
+	return true
+}
+
+func (s *Session) CollapseNearestArrayElements(doc *document.Document) bool {
+	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
+		return false
+	}
+
+	target, ok := nearestArrayTarget(doc, s.SelectedID)
+	if !ok {
+		return false
+	}
+	if s.Expanded == nil {
+		s.Expanded = make(map[document.NodeID]bool)
+	}
+	s.Expanded[target.ID] = true
+	for _, child := range target.Array {
+		collapseExpandedSubtree(child, s.Expanded)
+	}
+	return true
+}
+
 func expandAllContainers(node *document.Node, expanded map[document.NodeID]bool) {
 	if node == nil || !node.IsContainer() {
 		return
@@ -189,6 +229,41 @@ func expandAllContainers(node *document.Node, expanded map[document.NodeID]bool)
 	case document.KindArray:
 		for _, child := range node.Array {
 			expandAllContainers(child, expanded)
+		}
+	}
+}
+
+func nearestArrayTarget(doc *document.Document, selectedID document.NodeID) (*document.Node, bool) {
+	currentID := selectedID
+	for currentID != 0 {
+		loc, ok := doc.Find(currentID)
+		if !ok || loc.Node == nil {
+			return nil, false
+		}
+		if loc.Node.Kind == document.KindArray {
+			return loc.Node, true
+		}
+		if loc.Parent == nil {
+			return nil, false
+		}
+		currentID = loc.Parent.ID
+	}
+	return nil, false
+}
+
+func collapseExpandedSubtree(node *document.Node, expanded map[document.NodeID]bool) {
+	if node == nil || !node.IsContainer() {
+		return
+	}
+	delete(expanded, node.ID)
+	switch node.Kind {
+	case document.KindObject:
+		for _, entry := range node.Object {
+			collapseExpandedSubtree(entry.Value, expanded)
+		}
+	case document.KindArray:
+		for _, child := range node.Array {
+			collapseExpandedSubtree(child, expanded)
 		}
 	}
 }

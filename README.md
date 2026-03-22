@@ -87,6 +87,8 @@ You can add `--select '$.path.to.node'` to either startup form to open with a sp
 - `gg` / `G`: jump to the first or last visible row
 - `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found
 - `zR` / `zM`: expand all containers / collapse all containers except the root
+- `za`: expand the selected array, or nearest array ancestor, so each container element opens one level
+- `zA`: collapse the selected array, or nearest array ancestor, so all element containers close
 - `?`: open the built-in help screen
 - `t`: quick-preview the next theme for the current session
 - `S`: open the settings dialog
