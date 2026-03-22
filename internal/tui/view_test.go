@@ -68,18 +68,19 @@ func TestViewUsesRegistryThemeForRendering(t *testing.T) {
 	}
 
 	m.Session.ThemeName = config.DefaultThemeName
-	forestView := m.View()
+	defaultView := m.View()
 
-	if mistView == forestView {
+	if mistView == defaultView {
 		t.Fatalf("View() did not change after theme switch: %q", mistView)
 	}
-	if strings.Contains(forestView, registry.ThemeByName("mist").Key.Render("name")) {
-		t.Fatalf("View() = %q, unexpectedly contains mist key styling", forestView)
+	if strings.Contains(defaultView, registry.ThemeByName("mist").Key.Render("name")) {
+		t.Fatalf("View() = %q, unexpectedly contains mist key styling", defaultView)
 	}
 }
 
 func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
+	nextTheme := nextThemeName(t, BuiltinThemeRegistry(), config.DefaultThemeName)
 	m := testModelWithOptions(t, ModelOptions{
 		Settings:          config.Settings{Theme: config.DefaultThemeName},
 		SettingsPath:      paths.SettingsFile,
@@ -123,13 +124,14 @@ func TestViewShowsSettingsOverlayHints(t *testing.T) {
 	if strings.Contains(savedView, "preview only") {
 		t.Fatalf("View() = %q, want preview-only hint cleared after save", savedView)
 	}
-	if !strings.Contains(savedView, "Saved theme: harbor") {
+	if !strings.Contains(savedView, "Saved theme: "+nextTheme) {
 		t.Fatalf("View() = %q, want updated saved theme label", savedView)
 	}
 }
 
 func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
+	nextTheme := nextThemeName(t, BuiltinThemeRegistry(), config.DefaultThemeName)
 	m := testModelWithOptions(t, ModelOptions{
 		Settings:     config.Settings{Theme: config.DefaultThemeName},
 		SettingsPath: paths.SettingsFile,
@@ -141,7 +143,7 @@ func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 	m = updated.(*Model)
 
 	previewView := m.View()
-	if !strings.Contains(previewView, "previewing theme harbor") {
+	if !strings.Contains(previewView, "previewing theme "+nextTheme) {
 		t.Fatalf("View() = %q, want preview footer message", previewView)
 	}
 	if !strings.Contains(previewView, "S open settings  t quick preview  ? help") {
@@ -154,10 +156,10 @@ func TestViewShowsThemePreviewAndPersistMessages(t *testing.T) {
 	m = updated.(*Model)
 
 	savedView := m.View()
-	if !strings.Contains(savedView, `saved theme "harbor"`) {
+	if !strings.Contains(savedView, `saved theme "`+nextTheme+`"`) {
 		t.Fatalf("View() = %q, want saved footer message", savedView)
 	}
-	if !strings.Contains(savedView, "Saved theme: harbor") {
+	if !strings.Contains(savedView, "Saved theme: "+nextTheme) {
 		t.Fatalf("View() = %q, want saved theme label", savedView)
 	}
 }

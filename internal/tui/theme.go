@@ -37,7 +37,7 @@ type ThemeRegistry struct {
 }
 
 func BuiltinThemeRegistry() ThemeRegistry {
-	return newThemeRegistry(builtinThemes())
+	return newThemeRegistry(prioritizeTheme(builtinThemes(), config.DefaultThemeName))
 }
 
 func NewThemeRegistry(discovered []config.DiscoveredTheme) (ThemeRegistry, []string) {
@@ -120,6 +120,27 @@ func newThemeRegistry(themes []Theme) ThemeRegistry {
 	return registry
 }
 
+func prioritizeTheme(themes []Theme, name string) []Theme {
+	if len(themes) == 0 {
+		return nil
+	}
+	index := -1
+	target := normalizeThemeName(name)
+	for i, theme := range themes {
+		if normalizeThemeName(theme.Name) == target {
+			index = i
+			break
+		}
+	}
+	if index <= 0 {
+		return append([]Theme(nil), themes...)
+	}
+	prioritized := make([]Theme, 0, len(themes))
+	prioritized = append(prioritized, themes[index:]...)
+	prioritized = append(prioritized, themes[:index]...)
+	return prioritized
+}
+
 func normalizeThemeName(name string) string {
 	return strings.ToLower(strings.TrimSpace(name))
 }
@@ -192,91 +213,6 @@ func isValidThemeColor(value string) bool {
 
 func invalidThemeColorWarning(source, slot, field, value string) string {
 	return fmt.Sprintf("theme %s %s.%s %q is invalid; using default", source, slot, field, value)
-}
-
-func builtinThemes() []Theme {
-	return []Theme{
-		{
-			Name:      "forest",
-			Key:       themeStyle("#9CCF5D", "", false),
-			String:    themeStyle("#F6BD60", "", false),
-			Number:    themeStyle("#84A59D", "", false),
-			Bool:      themeStyle("#F28482", "", false),
-			Null:      themeStyle("#CDB4DB", "", false),
-			Muted:     themeStyle("#7A7A7A", "", false),
-			Selected:  themeStyle("#FEFAE0", "#283618", true),
-			SearchHit: themeStyle("#FEFAE0", "#3A5A40", false),
-			Status:    themeStyle("#D4A373", "", false),
-			Error:     themeStyle("#E63946", "", true),
-			Border:    themeStyle("#606C38", "", false),
-			Help:      themeStyle("#DDA15E", "", false),
-			Prompt:    themeStyle("#FEFAE0", "", false),
-		},
-		{
-			Name:      "harbor",
-			Key:       themeStyle("#7BDFF2", "", false),
-			String:    themeStyle("#F7A072", "", false),
-			Number:    themeStyle("#B2F7EF", "", false),
-			Bool:      themeStyle("#F2B5D4", "", false),
-			Null:      themeStyle("#CDB4DB", "", false),
-			Muted:     themeStyle("#5C677D", "", false),
-			Selected:  themeStyle("#FFF3B0", "#0B3954", true),
-			SearchHit: themeStyle("#FFF3B0", "#087E8B", false),
-			Status:    themeStyle("#F7A072", "", false),
-			Error:     themeStyle("#D7263D", "", true),
-			Border:    themeStyle("#247BA0", "", false),
-			Help:      themeStyle("#FFF3B0", "", false),
-			Prompt:    themeStyle("#E0FBFC", "", false),
-		},
-		{
-			Name:      "paper",
-			Key:       themeStyle("#24527A", "", false),
-			String:    themeStyle("#9C4A1A", "", false),
-			Number:    themeStyle("#4B6A3A", "", false),
-			Bool:      themeStyle("#A13333", "", false),
-			Null:      themeStyle("#7A4D8B", "", false),
-			Muted:     themeStyle("#6B7280", "", false),
-			Selected:  themeStyle("#111827", "#D9E8F5", true),
-			SearchHit: themeStyle("#111827", "#FDE68A", false),
-			Status:    themeStyle("#1D4ED8", "", false),
-			Error:     themeStyle("#991B1B", "", true),
-			Border:    themeStyle("#94A3B8", "", false),
-			Help:      themeStyle("#4B5563", "", false),
-			Prompt:    themeStyle("#111827", "", false),
-		},
-		{
-			Name:      "nord",
-			Key:       themeStyle("#81A1C1", "", false),
-			String:    themeStyle("#A3BE8C", "", false),
-			Number:    themeStyle("#88C0D0", "", false),
-			Bool:      themeStyle("#EBCB8B", "", false),
-			Null:      themeStyle("#D08770", "", false),
-			Muted:     themeStyle("#4C566A", "", false),
-			Selected:  themeStyle("#ECEFF4", "#5E81AC", true),
-			SearchHit: themeStyle("#2E3440", "#8FBCBB", false),
-			Status:    themeStyle("#88C0D0", "", false),
-			Error:     themeStyle("#BF616A", "", true),
-			Border:    themeStyle("#4C566A", "", false),
-			Help:      themeStyle("#D8DEE9", "", false),
-			Prompt:    themeStyle("#ECEFF4", "", false),
-		},
-		{
-			Name:      "ember",
-			Key:       themeStyle("#F5B971", "", false),
-			String:    themeStyle("#FF8A65", "", false),
-			Number:    themeStyle("#7FDBCA", "", false),
-			Bool:      themeStyle("#FF6B6B", "", false),
-			Null:      themeStyle("#C3A6FF", "", false),
-			Muted:     themeStyle("#8D99AE", "", false),
-			Selected:  themeStyle("#FFF4E6", "#5A1E0E", true),
-			SearchHit: themeStyle("#1F1F1F", "#FFB86C", false),
-			Status:    themeStyle("#FFC857", "", false),
-			Error:     themeStyle("#FF4D6D", "", true),
-			Border:    themeStyle("#7B341E", "", false),
-			Help:      themeStyle("#F4A261", "", false),
-			Prompt:    themeStyle("#FFE8D6", "", false),
-		},
-	}
 }
 
 func themeStyle(foreground, background string, bold bool) lipgloss.Style {

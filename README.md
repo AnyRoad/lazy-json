@@ -10,7 +10,7 @@
 
 - tree-first navigation with `h/j/k/l`, `gg`, and `G`
 - prefix shortcuts for clipboard actions, structural jumps, and tree-wide expand/collapse
-- ordered object rendering with syntax highlighting, built-in light/dark palettes, and persistent theme settings
+- ordered object rendering with syntax highlighting, built-in themes, and persistent theme settings
 - collapse and expand for objects and arrays
 - substring search with `/`, `n`, and `N`
 - structured editing for scalars, object keys, object fields, and array items

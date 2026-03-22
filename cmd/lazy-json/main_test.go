@@ -210,6 +210,7 @@ func TestLoadModelOptionsFromPathsUsesPersistedTheme(t *testing.T) {
 
 func TestLoadModelOptionsFromPathsRestoresThemeAfterModalSaveAndRestart(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
+	nextTheme := tui.BuiltinThemeRegistry().NextTheme(config.DefaultThemeName).Name
 
 	model := newTestModel(t, loadModelOptionsFromPaths(paths))
 
@@ -220,7 +221,7 @@ func TestLoadModelOptionsFromPathsRestoresThemeAfterModalSaveAndRestart(t *testi
 	updated, _ = model.Update(runeKey("s"))
 	model = updated.(*tui.Model)
 
-	if got, want := model.Settings.Theme, "harbor"; got != want {
+	if got, want := model.Settings.Theme, nextTheme; got != want {
 		t.Fatalf("Settings.Theme = %q, want %q after save", got, want)
 	}
 	if !model.SettingsPersisted {
@@ -229,10 +230,10 @@ func TestLoadModelOptionsFromPathsRestoresThemeAfterModalSaveAndRestart(t *testi
 
 	restarted := newTestModel(t, loadModelOptionsFromPaths(paths))
 
-	if got, want := restarted.Settings.Theme, "harbor"; got != want {
+	if got, want := restarted.Settings.Theme, nextTheme; got != want {
 		t.Fatalf("restarted Settings.Theme = %q, want %q", got, want)
 	}
-	if got, want := restarted.Session.ThemeName, "harbor"; got != want {
+	if got, want := restarted.Session.ThemeName, nextTheme; got != want {
 		t.Fatalf("restarted Session.ThemeName = %q, want %q", got, want)
 	}
 	if !restarted.SettingsPersisted {

@@ -15,7 +15,7 @@ const (
 	AppDirName       = "lazy-json"
 	SettingsFileName = "settings.json"
 	ThemesDirName    = "themes"
-	DefaultThemeName = "forest"
+	DefaultThemeName = "default"
 )
 
 type Paths struct {

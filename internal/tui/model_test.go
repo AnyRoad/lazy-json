@@ -28,6 +28,45 @@ func testModelWithOptions(t *testing.T, options ModelOptions) *Model {
 	return NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, options)
 }
 
+func builtinThemeNameAt(t *testing.T, index int) string {
+	t.Helper()
+	themes := BuiltinThemeRegistry().Themes()
+	if index < 0 || index >= len(themes) {
+		t.Fatalf("builtin theme index %d out of range %d", index, len(themes))
+	}
+	return themes[index].Name
+}
+
+func lastBuiltinThemeName(t *testing.T) string {
+	t.Helper()
+	themes := BuiltinThemeRegistry().Themes()
+	if len(themes) == 0 {
+		t.Fatal("builtin themes are empty")
+	}
+	return themes[len(themes)-1].Name
+}
+
+func nextThemeName(t *testing.T, registry ThemeRegistry, current string) string {
+	t.Helper()
+	next := registry.NextTheme(current)
+	if next.Name == "" {
+		t.Fatalf("NextTheme(%q) returned empty theme", current)
+	}
+	return next.Name
+}
+
+func previousThemeName(t *testing.T, registry ThemeRegistry, current string) string {
+	t.Helper()
+	themes := registry.Themes()
+	for index, theme := range themes {
+		if normalizeThemeName(theme.Name) == normalizeThemeName(current) {
+			return themes[(index-1+len(themes))%len(themes)].Name
+		}
+	}
+	t.Fatalf("theme %q not found in registry", current)
+	return ""
+}
+
 type stubClipboard struct {
 	writes []string
 	err    error
@@ -86,7 +125,7 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 
 	m := testModelWithOptions(t, ModelOptions{
 		ThemeRegistry: registry,
-		Settings:      config.Settings{Theme: "ember"},
+		Settings:      config.Settings{Theme: lastBuiltinThemeName(t)},
 	})
 	updated, _ := m.Update(key("j"))
 	m = updated.(*Model)
@@ -95,10 +134,10 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 	}
 	updated, _ = m.Update(key("t"))
 	m = updated.(*Model)
-	if m.Session.ThemeName != "mist" {
+	if got, want := m.Session.ThemeName, "mist"; got != want {
 		t.Fatalf("ThemeName = %q", m.Session.ThemeName)
 	}
-	if got, want := m.Settings.Theme, "ember"; got != want {
+	if got, want := m.Settings.Theme, lastBuiltinThemeName(t); got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
 }
@@ -113,7 +152,7 @@ func TestCommandThemeSwitch(t *testing.T) {
 
 	m := testModelWithOptions(t, ModelOptions{
 		ThemeRegistry: registry,
-		Settings:      config.Settings{Theme: "ember"},
+		Settings:      config.Settings{Theme: lastBuiltinThemeName(t)},
 	})
 
 	runCmd(t, m, m.handleCommand("theme"))
@@ -124,7 +163,7 @@ func TestCommandThemeSwitch(t *testing.T) {
 	if got, want := m.Session.Status, "previewing theme mist"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
 	}
-	if got, want := m.Settings.Theme, "ember"; got != want {
+	if got, want := m.Settings.Theme, lastBuiltinThemeName(t); got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
 }

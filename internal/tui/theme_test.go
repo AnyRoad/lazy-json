@@ -12,32 +12,39 @@ import (
 
 func TestBuiltinThemeRegistryLookupAndFallback(t *testing.T) {
 	registry := BuiltinThemeRegistry()
+	names := themeNames(registry.Themes())
 
-	if got, want := themeNames(registry.Themes()), []string{"forest", "harbor", "paper", "nord", "ember"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("Themes() = %v, want %v", got, want)
+	if len(names) == 0 {
+		t.Fatal("Themes() returned no built-in themes")
 	}
 
-	harbor, ok := registry.Lookup("HARBOR")
+	defaultTheme, ok := registry.Lookup(strings.ToUpper(config.DefaultThemeName))
 	if !ok {
-		t.Fatal("Lookup(HARBOR) = false, want true")
+		t.Fatalf("Lookup(%s) = false, want true", strings.ToUpper(config.DefaultThemeName))
 	}
-	if harbor.Name != "harbor" {
-		t.Fatalf("Lookup(HARBOR).Name = %q, want harbor", harbor.Name)
+	if defaultTheme.Name != config.DefaultThemeName {
+		t.Fatalf("Lookup(%s).Name = %q, want %q", strings.ToUpper(config.DefaultThemeName), defaultTheme.Name, config.DefaultThemeName)
+	}
+	if got, want := defaultTheme.Selected.GetBackground(), lipgloss.Color("#585858"); got != want {
+		t.Fatalf("default selected background = %#v, want %#v", got, want)
 	}
 
-	paper, ok := registry.Lookup("paper")
+	githubDark, ok := registry.Lookup("GITHUB-DARK")
 	if !ok {
-		t.Fatal("Lookup(paper) = false, want true")
+		t.Fatal("Lookup(GITHUB-DARK) = false, want true")
 	}
-	if got, want := paper.Selected.GetBackground(), lipgloss.Color("#D9E8F5"); got != want {
-		t.Fatalf("paper selected background = %#v, want %#v", got, want)
+	if githubDark.Name != "github-dark" {
+		t.Fatalf("Lookup(GITHUB-DARK).Name = %q, want github-dark", githubDark.Name)
+	}
+	if got, want := githubDark.Key.GetForeground(), lipgloss.Color("#79c0ff"); got != want {
+		t.Fatalf("github-dark key foreground = %#v, want %#v", got, want)
 	}
 
 	nord, ok := registry.Lookup("NORD")
 	if !ok {
 		t.Fatal("Lookup(NORD) = false, want true")
 	}
-	if got, want := nord.Selected.GetBackground(), lipgloss.Color("#5E81AC"); got != want {
+	if got, want := nord.Selected.GetBackground(), lipgloss.Color("#4d535e"); got != want {
 		t.Fatalf("nord selected background = %#v, want %#v", got, want)
 	}
 
@@ -57,11 +64,11 @@ func TestNewThemeRegistryCyclesAcrossBuiltInAndExternalThemes(t *testing.T) {
 		t.Fatalf("warnings = %v, want none", warnings)
 	}
 
-	if got, want := registry.NextTheme("forest").Name, "harbor"; got != want {
-		t.Fatalf("NextTheme(forest).Name = %q, want %q", got, want)
+	if got, want := registry.NextTheme(config.DefaultThemeName).Name, nextThemeName(t, BuiltinThemeRegistry(), config.DefaultThemeName); got != want {
+		t.Fatalf("NextTheme(%s).Name = %q, want %q", config.DefaultThemeName, got, want)
 	}
-	if got, want := registry.NextTheme("ember").Name, "mist"; got != want {
-		t.Fatalf("NextTheme(ember).Name = %q, want %q", got, want)
+	if got, want := registry.NextTheme(lastBuiltinThemeName(t)).Name, "mist"; got != want {
+		t.Fatalf("NextTheme(lastBuiltin).Name = %q, want %q", got, want)
 	}
 	if got, want := registry.NextTheme("aurora").Name, config.DefaultThemeName; got != want {
 		t.Fatalf("NextTheme(aurora).Name = %q, want %q", got, want)
@@ -151,19 +158,24 @@ func TestNewThemeRegistryWarnsOnInvalidColorsAndKeepsFallbackStyles(t *testing.T
 func TestNewThemeRegistryPreservesStableOrderingAndWarnsOnDuplicateNames(t *testing.T) {
 	discovered := []config.DiscoveredTheme{
 		{Path: "10-aurora.json", Spec: config.ThemeSpec{Name: "aurora"}},
-		{Path: "20-paper.json", Spec: config.ThemeSpec{Name: "paper"}},
+		{Path: "20-default.json", Spec: config.ThemeSpec{Name: config.DefaultThemeName}},
 		{Path: "30-zenith.json", Spec: config.ThemeSpec{Name: "zenith"}},
 	}
 
 	registry, warnings := NewThemeRegistry(discovered)
+	builtinNames := themeNames(BuiltinThemeRegistry().Themes())
+	registryNames := themeNames(registry.Themes())
 
-	if got, want := themeNames(registry.Themes()), []string{"forest", "harbor", "paper", "nord", "ember", "aurora", "zenith"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("Themes() = %v, want %v", got, want)
+	if got, want := registryNames[:len(builtinNames)], builtinNames; !reflect.DeepEqual(got, want) {
+		t.Fatalf("builtin prefix = %v, want %v", got, want)
+	}
+	if got, want := registryNames[len(registryNames)-2:], []string{"aurora", "zenith"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("external suffix = %v, want %v", got, want)
 	}
 	if len(warnings) != 1 {
 		t.Fatalf("warnings = %v, want 1 warning", warnings)
 	}
-	if !strings.Contains(warnings[0], "20-paper.json") || !strings.Contains(warnings[0], "duplicate theme name") {
+	if !strings.Contains(warnings[0], "20-default.json") || !strings.Contains(warnings[0], "duplicate theme name") {
 		t.Fatalf("warning = %q, want duplicate warning", warnings[0])
 	}
 }

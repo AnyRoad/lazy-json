@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
+	nextTheme := nextThemeName(t, BuiltinThemeRegistry(), config.DefaultThemeName)
 	m := testModelWithOptions(t, ModelOptions{
 		Settings:     config.Settings{Theme: config.DefaultThemeName},
 		SettingsPath: paths.SettingsFile,
@@ -36,7 +38,7 @@ func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) 
 	updated, _ = m.Update(specialKey(tea.KeyRight))
 	m = updated.(*Model)
 
-	if got, want := m.Session.ThemeName, "harbor"; got != want {
+	if got, want := m.Session.ThemeName, nextTheme; got != want {
 		t.Fatalf("ThemeName = %q, want %q", got, want)
 	}
 	if got, want := m.Settings.Theme, config.DefaultThemeName; got != want {
@@ -49,7 +51,7 @@ func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) 
 	if m.settingsOpen() {
 		t.Fatal("settings dialog is open, want closed")
 	}
-	if got, want := m.Session.ThemeName, "harbor"; got != want {
+	if got, want := m.Session.ThemeName, nextTheme; got != want {
 		t.Fatalf("ThemeName = %q, want %q after esc", got, want)
 	}
 	if got, want := m.Session.Mode, "normal"; string(got) != want {
@@ -62,6 +64,7 @@ func TestSettingsModalOpensPreviewsThemeAndEscClosesWithoutSaving(t *testing.T) 
 
 func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	paths := config.PathsFromUserConfigDir(t.TempDir())
+	nextTheme := nextThemeName(t, BuiltinThemeRegistry(), config.DefaultThemeName)
 	m := testModelWithOptions(t, ModelOptions{
 		Settings:     config.Settings{Theme: config.DefaultThemeName},
 		SettingsPath: paths.SettingsFile,
@@ -81,10 +84,10 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	updated, _ = m.Update(key("s"))
 	m = updated.(*Model)
 
-	if got, want := m.Session.ThemeName, "harbor"; got != want {
+	if got, want := m.Session.ThemeName, nextTheme; got != want {
 		t.Fatalf("ThemeName = %q, want %q", got, want)
 	}
-	if got, want := m.Settings.Theme, "harbor"; got != want {
+	if got, want := m.Settings.Theme, nextTheme; got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
 	}
 	if !m.SettingsPersisted {
@@ -93,7 +96,7 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	if !m.settingsOpen() {
 		t.Fatal("settings dialog is closed after save, want open")
 	}
-	if got, want := m.Session.Status, `saved theme "harbor"`; got != want {
+	if got, want := m.Session.Status, `saved theme "`+nextTheme+`"`; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
 	}
 
@@ -101,8 +104,8 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", paths.SettingsFile, err)
 	}
-	if !strings.Contains(string(data), `"theme": "harbor"`) {
-		t.Fatalf("settings file = %q, want harbor theme", string(data))
+	if !strings.Contains(string(data), `"theme": "`+nextTheme+`"`) {
+		t.Fatalf("settings file = %q, want saved theme", string(data))
 	}
 }
 
@@ -139,6 +142,7 @@ func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
 	m := testModelWithOptions(t, ModelOptions{
 		Settings: config.Settings{Theme: config.DefaultThemeName},
 	})
+	wantTheme := previousThemeName(t, BuiltinThemeRegistry(), config.DefaultThemeName)
 	selectedBefore := m.Session.SelectedID
 
 	updated, _ := m.Update(key("S"))
@@ -151,7 +155,7 @@ func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
 	if got, want := m.Session.SelectedID, selectedBefore; got != want {
 		t.Fatalf("SelectedID = %d, want %d", got, want)
 	}
-	if got, want := m.Session.ThemeName, "ember"; got != want {
+	if got, want := m.Session.ThemeName, wantTheme; got != want {
 		t.Fatalf("ThemeName = %q, want %q", got, want)
 	}
 	if !m.settingsOpen() {
@@ -160,6 +164,9 @@ func TestSettingsModalConsumesNavigationAndCyclesBackward(t *testing.T) {
 }
 
 func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
+	builtins := BuiltinThemeRegistry().Themes()
+	builtinCount := len(builtins)
+	lastBuiltin := builtins[builtinCount-1].Name
 	registry, warnings := NewThemeRegistry([]config.DiscoveredTheme{
 		{Path: "10-mist.json", Spec: config.ThemeSpec{Name: "mist"}},
 		{Path: "20-aurora.json", Spec: config.ThemeSpec{Name: "aurora"}},
@@ -170,7 +177,7 @@ func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
 
 	m := testModelWithOptions(t, ModelOptions{
 		ThemeRegistry: registry,
-		Settings:      config.Settings{Theme: "ember"},
+		Settings:      config.Settings{Theme: lastBuiltin},
 	})
 	m.Width = 120
 	m.Height = 20
@@ -179,11 +186,11 @@ func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
 	m = updated.(*Model)
 
 	initialView := m.View()
-	if !strings.Contains(initialView, " ember ") {
-		t.Fatalf("View() = %q, want ember selected", initialView)
+	if !strings.Contains(initialView, " "+lastBuiltin+" ") {
+		t.Fatalf("View() = %q, want last built-in selected", initialView)
 	}
-	if !strings.Contains(initialView, "5/7") {
-		t.Fatalf("View() = %q, want ember position", initialView)
+	if !strings.Contains(initialView, fmt.Sprintf("%d/%d", builtinCount, builtinCount+2)) {
+		t.Fatalf("View() = %q, want built-in position", initialView)
 	}
 
 	updated, _ = m.Update(specialKey(tea.KeyRight))
@@ -199,7 +206,7 @@ func TestSettingsModalListsBuiltInAndExternalThemesInOrder(t *testing.T) {
 	if !strings.Contains(externalView, " aurora ") {
 		t.Fatalf("View() = %q, want aurora selected", externalView)
 	}
-	if !strings.Contains(externalView, "7/7") {
+	if !strings.Contains(externalView, fmt.Sprintf("%d/%d", builtinCount+2, builtinCount+2)) {
 		t.Fatalf("View() = %q, want aurora position", externalView)
 	}
 }

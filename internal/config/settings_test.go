@@ -86,7 +86,7 @@ func TestLoadSettingsReadFailureFallsBackToDefaults(t *testing.T) {
 
 func TestSaveAndLoadSettings(t *testing.T) {
 	paths := PathsFromUserConfigDir(t.TempDir())
-	want := Settings{Theme: "harbor"}
+	want := Settings{Theme: "custom"}
 
 	if err := SaveSettings(paths.SettingsFile, want); err != nil {
 		t.Fatalf("SaveSettings() error = %v", err)
@@ -101,7 +101,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 
 	data := string(readFile(t, paths.SettingsFile))
-	if !strings.Contains(data, "\"theme\": \"harbor\"") {
+	if !strings.Contains(data, "\"theme\": \"custom\"") {
 		t.Fatalf("settings file = %q, want persisted theme", data)
 	}
 }
@@ -110,7 +110,7 @@ func TestSaveSettingsReturnsCreateDirFailure(t *testing.T) {
 	blockedPath := filepath.Join(t.TempDir(), "blocked")
 	writeFile(t, blockedPath, []byte("blocker"))
 
-	err := SaveSettings(filepath.Join(blockedPath, SettingsFileName), Settings{Theme: "harbor"})
+	err := SaveSettings(filepath.Join(blockedPath, SettingsFileName), Settings{Theme: "custom"})
 	if err == nil {
 		t.Fatal("SaveSettings() error = nil, want error")
 	}
@@ -125,7 +125,7 @@ func TestSaveSettingsReturnsWriteFailureWhenTargetIsDirectory(t *testing.T) {
 		t.Fatalf("Mkdir(%q) error = %v", path, err)
 	}
 
-	err := SaveSettings(path, Settings{Theme: "harbor"})
+	err := SaveSettings(path, Settings{Theme: "custom"})
 	if err == nil {
 		t.Fatal("SaveSettings() error = nil, want error")
 	}
