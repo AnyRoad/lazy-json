@@ -30,10 +30,3 @@ jobs:
 
       - name: Build binary
         run: make build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: lazy-json-linux-amd64
-          path: dist/lazy-json
-          if-no-files-found: error

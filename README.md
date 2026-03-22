@@ -1,10 +1,13 @@
 # lazy-json
 
-[![CI](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml/badge.svg?branch=release)](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml?query=branch%3Arelease)
+[![Quality](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml/badge.svg?branch=release)](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml?query=branch%3Arelease)
+[![Coverage](docs/badges/coverage.svg)](docs/badges/coverage.svg)
 [![Release](https://img.shields.io/github/v/release/anyroad/lazy-json)](https://github.com/anyroad/lazy-json/releases)
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://go.dev/dl/)
 
 `lazy-json` is a keyboard-first JSON viewer and editor for the terminal, built with Go and Bubble Tea. It focuses on structured JSON editing instead of raw text editing: move around a tree, expand and collapse nodes, search, edit scalars, add and remove nodes, hand subtrees to your external editor, and optionally run `jq` transforms without leaving the app.
+
+The project name and keyboard-first workflow are inspired by [LazyVim](https://github.com/LazyVim/LazyVim) and [lazygit](https://github.com/jesseduffield/lazygit): fast navigation, modal interactions, and useful shortcuts over heavyweight UI.
 
 ## Features
 
@@ -237,6 +240,17 @@ If you need writable Go cache directories in a restricted environment:
 
 ```bash
 GOCACHE=/tmp/lazy-json-gocache GOMODCACHE=/tmp/lazy-json-gomodcache make check
+```
+
+### Badges
+
+`README.md` uses the live GitHub Actions badge for quality and a committed static SVG for coverage at `docs/badges/coverage.svg`.
+
+To refresh the coverage percentage manually:
+
+```bash
+go test ./... -coverprofile=/tmp/lazy-json-coverage.out
+go tool cover -func=/tmp/lazy-json-coverage.out | tail -n 1
 ```
 
 ### GitHub Actions
