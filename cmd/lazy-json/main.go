@@ -122,12 +122,10 @@ func applyStartupSelection(model *tui.Model, selectPath string) error {
 		return nil
 	}
 
-	resolution, err := model.Doc.ResolvePath(selectPath)
+	resolution, err := model.SelectPath(selectPath)
 	if err != nil {
-		return fmt.Errorf("invalid select path: %w", err)
+		return err
 	}
-
-	model.Session.RevealSelection(model.Doc, resolution.NodeID, resolution.Ancestors)
 	if resolution.Exact {
 		return nil
 	}

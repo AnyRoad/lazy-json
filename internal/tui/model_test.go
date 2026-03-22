@@ -169,6 +169,82 @@ func TestCommandThemeSwitch(t *testing.T) {
 	}
 }
 
+func TestCommandSelectPathExact(t *testing.T) {
+	m := testModel(t)
+
+	runCmd(t, m, m.handleCommand("select-path $.items[1]"))
+
+	items := m.Doc.Root.Object[1].Value
+	if got, want := m.Session.SelectedID, items.Array[1].ID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if !m.Session.Expanded[items.ID] {
+		t.Fatal("items container is not expanded")
+	}
+	if got, want := m.Session.Status, "selected path $.items[1]"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if got := m.Session.Error; got != "" {
+		t.Fatalf("Error = %q, want empty", got)
+	}
+}
+
+func TestCommandSelectPathFallbackMessages(t *testing.T) {
+	t.Run("nearest ancestor", func(t *testing.T) {
+		m := testModel(t)
+
+		runCmd(t, m, m.handleCommand("select-path $.items[99].title"))
+
+		if got, want := m.Session.SelectedID, m.Doc.Root.Object[1].Value.ID; got != want {
+			t.Fatalf("SelectedID = %d, want %d", got, want)
+		}
+		if got, want := m.Session.Status, "select path not found: $.items[99].title; opened nearest existing ancestor $.items"; got != want {
+			t.Fatalf("Status = %q, want %q", got, want)
+		}
+		if got := m.Session.Error; got != "" {
+			t.Fatalf("Error = %q, want empty", got)
+		}
+	})
+
+	t.Run("root only", func(t *testing.T) {
+		m := testModel(t)
+
+		runCmd(t, m, m.handleCommand("select-path $.missing.branch"))
+
+		if got, want := m.Session.SelectedID, m.Doc.Root.ID; got != want {
+			t.Fatalf("SelectedID = %d, want %d", got, want)
+		}
+		if got, want := m.Session.Error, "select path not found: $.missing.branch; opened root $"; got != want {
+			t.Fatalf("Error = %q, want %q", got, want)
+		}
+		if got := m.Session.Status; got != "" {
+			t.Fatalf("Status = %q, want empty", got)
+		}
+	})
+}
+
+func TestCommandSelectPathRejectsInvalidInput(t *testing.T) {
+	t.Run("missing path", func(t *testing.T) {
+		m := testModel(t)
+
+		runCmd(t, m, m.handleCommand("select-path"))
+
+		if got, want := m.Session.Error, "select-path requires a JSON path"; got != want {
+			t.Fatalf("Error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("malformed path", func(t *testing.T) {
+		m := testModel(t)
+
+		runCmd(t, m, m.handleCommand("select-path $.items["))
+
+		if got := m.Session.Error; got == "" {
+			t.Fatal("Error = empty, want invalid select path")
+		}
+	})
+}
+
 func TestHelpToggle(t *testing.T) {
 	m := testModel(t)
 	updated, _ := m.Update(key("?"))

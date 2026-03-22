@@ -54,6 +54,9 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, ":settings open settings dialog") {
 		t.Fatalf("helpView() = %q, want settings command", help)
 	}
+	if !strings.Contains(help, ":select-path P  select node by JSON path") {
+		t.Fatalf("helpView() = %q, want select-path command", help)
+	}
 	if !strings.Contains(help, "wrap      long strings setting affects display only") {
 		t.Fatalf("helpView() = %q, want wrap settings help", help)
 	}
@@ -93,6 +96,7 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"- `yj`: copy the whole document as pretty JSON",
 		"- `:theme`: quick-preview the next theme without saving",
 		"- `:settings`: open the settings dialog",
+		"- `:select-path $.items[0].name`: select a node by JSON path",
 		"- `:copy-path`: copy the selected JSON path",
 		"- `:copy-json`: copy the whole document as pretty JSON",
 		"- `:expand-all`: expand every object and array in the document",

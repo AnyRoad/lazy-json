@@ -23,6 +23,21 @@ type jqFinishedMsg struct {
 	Err      error
 }
 
+func (m *Model) SelectPath(selectPath string) (document.PathResolution, error) {
+	selectPath = strings.TrimSpace(selectPath)
+	if selectPath == "" {
+		return document.PathResolution{}, fmt.Errorf("select path cannot be empty")
+	}
+
+	resolution, err := m.Doc.ResolvePath(selectPath)
+	if err != nil {
+		return document.PathResolution{}, fmt.Errorf("invalid select path: %w", err)
+	}
+
+	m.Session.RevealSelection(m.Doc, resolution.NodeID, resolution.Ancestors)
+	return resolution, nil
+}
+
 func (m *Model) selectedNode() (*document.Node, error) {
 	loc, ok := m.Doc.Find(m.Session.SelectedID)
 	if !ok {
@@ -310,6 +325,30 @@ func (m *Model) nextParentSibling() tea.Cmd {
 	return nil
 }
 
+func (m *Model) selectPathCommand(selectPath string) tea.Cmd {
+	selectPath = strings.TrimSpace(selectPath)
+	if selectPath == "" {
+		m.Session.SetError("select-path requires a JSON path")
+		return nil
+	}
+
+	resolution, err := m.SelectPath(selectPath)
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	if resolution.Exact {
+		m.Session.SetStatus("selected path " + resolution.MatchedPath)
+		return nil
+	}
+	if resolution.MatchedPath == "$" {
+		m.Session.SetError(fmt.Sprintf("select path not found: %s; opened root $", selectPath))
+		return nil
+	}
+	m.Session.SetStatus(fmt.Sprintf("select path not found: %s; opened nearest existing ancestor %s", selectPath, resolution.MatchedPath))
+	return nil
+}
+
 func (m *Model) saveAndQuit(path string) tea.Cmd {
 	if path == "" && m.Session.SourceKind == source.KindStdin && m.Session.SourcePath == "" {
 		data, err := m.Doc.MarshalIndentWith(m.ActiveSettings.WithDefaults().SaveIndent.String())
@@ -378,6 +417,10 @@ func (m *Model) handleCommand(command string) tea.Cmd {
 	case command == "settings":
 		m.openSettings()
 		return nil
+	case command == "select-path":
+		return m.selectPathCommand("")
+	case strings.HasPrefix(command, "select-path "):
+		return m.selectPathCommand(strings.TrimSpace(strings.TrimPrefix(command, "select-path ")))
 	case command == "copy-path":
 		return m.copyPath()
 	case command == "copy-key":

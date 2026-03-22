@@ -131,6 +131,7 @@ Search matches visible rows based on keys, scalar values, and rendered JSON path
 - `:q!`: quit without saving
 - `:theme`: quick-preview the next theme without saving
 - `:settings`: open the settings dialog
+- `:select-path $.items[0].name`: select a node by JSON path using the same syntax as `--select`
 - `:copy-path`: copy the selected JSON path
 - `:copy-key`: copy the selected object key
 - `:copy-value`: copy the selected value as compact JSON

@@ -42,6 +42,7 @@ Commands
   :q / :q!  quit / force quit
   :theme    quick preview next theme
   :settings open settings dialog
+  :select-path P  select node by JSON path
   :copy-*   copy path/key/value/subtree/document
   :expand-all / :collapse-all
   :next-parent-sibling
