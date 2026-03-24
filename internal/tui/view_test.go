@@ -100,6 +100,29 @@ func TestViewPreservesGlobalLineNumberGapsWhenCollapsed(t *testing.T) {
 	}
 }
 
+func TestViewRendersLongArrayBatchLabels(t *testing.T) {
+	doc := testLongArrayDoc(t, 101)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+	m.Session.Expanded[items.ID] = true
+	m.Session.Refresh(doc)
+	m.Width = 120
+	m.Height = 20
+
+	lines := splitViewLines(stripANSI(m.View()))
+	if got := lines[2]; !strings.Contains(got, "▸ [0-99]") {
+		t.Fatalf("third line = %q, want first batch label", got)
+	}
+	if got := lines[3]; !strings.Contains(got, "▸ [100-100]") {
+		t.Fatalf("fourth line = %q, want second batch label", got)
+	}
+	if got := lines[2]; strings.Contains(got, "[0]:") {
+		t.Fatalf("third line = %q, want batch row instead of direct item row", got)
+	}
+}
+
 func TestViewPadsToViewportHeightAndAnchorsFooter(t *testing.T) {
 	m := testModel(t)
 	m.Width = 120

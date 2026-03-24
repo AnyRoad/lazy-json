@@ -2,13 +2,16 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/session"
 	"github.com/anyroad/lazy-json/internal/source"
 )
 
@@ -27,6 +30,63 @@ func testModelWithOptions(t *testing.T, options ModelOptions) *Model {
 		t.Fatal(err)
 	}
 	return NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, options)
+}
+
+func testLongArrayDoc(t *testing.T, count int) *document.Document {
+	t.Helper()
+
+	var raw strings.Builder
+	raw.WriteString(`{"items":[`)
+	for idx := 0; idx < count; idx++ {
+		if idx > 0 {
+			raw.WriteByte(',')
+		}
+		raw.WriteString(fmt.Sprintf("%d", idx))
+	}
+	raw.WriteString(`],"tail":true}`)
+
+	doc, err := document.Parse([]byte(raw.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func testLongObjectArrayDoc(t *testing.T, count int) *document.Document {
+	t.Helper()
+
+	var raw strings.Builder
+	raw.WriteString(`{"items":[`)
+	for idx := 0; idx < count; idx++ {
+		if idx > 0 {
+			raw.WriteByte(',')
+		}
+		raw.WriteString(fmt.Sprintf(`{"title":"item-%d"}`, idx))
+	}
+	raw.WriteString(`],"tail":true}`)
+
+	doc, err := document.Parse([]byte(raw.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func selectFirstBatch(t *testing.T, m *Model, arrayID document.NodeID) {
+	t.Helper()
+
+	m.Session.SelectNode(arrayID)
+	m.Session.MoveInto(m.Doc)
+	m.refresh()
+	m.Session.MoveInto(m.Doc)
+
+	row, ok := m.Session.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after selecting first batch")
+	}
+	if !row.IsBatch() || row.BatchLabel() != "[0-99]" {
+		t.Fatalf("CurrentRow() = %#v, want first batch row", row)
+	}
 }
 
 func builtinThemeNameAt(t *testing.T, index int) string {
@@ -707,5 +767,91 @@ func TestExpandCollapseAndNextParentSiblingCommands(t *testing.T) {
 	}
 	if got, want := m.Session.Status, "collapsed all nodes"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
+	}
+}
+
+func TestBatchRowsRejectNodeOnlyCommands(t *testing.T) {
+	doc := testLongArrayDoc(t, 101)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+
+	selectFirstBatch(t, m, items.ID)
+
+	runCmd(t, m, m.handleCommand("copy-path"))
+	if got, want := m.Session.Error, "batch rows do not have a JSON path"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.deleteSelected())
+	if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.startScalarEdit())
+	if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.startRename())
+	if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.copyValue())
+	if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.copySubtree())
+	if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.editExternal())
+	if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+}
+
+func TestAddArrayItemFromBatchRowTargetsParentArray(t *testing.T) {
+	doc := testLongArrayDoc(t, 101)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+
+	selectFirstBatch(t, m, items.ID)
+
+	runCmd(t, m, m.startAdd())
+	if got, want := m.promptKind, promptAddArray; got != want {
+		t.Fatalf("promptKind = %q, want %q", got, want)
+	}
+
+	m.prompt.SetValue("999")
+	runCmd(t, m, m.submitPrompt())
+
+	if got, want := len(items.Array), 102; got != want {
+		t.Fatalf("len(items.Array) = %d, want %d", got, want)
+	}
+	if got, want := items.Array[len(items.Array)-1].Number, "999"; got != want {
+		t.Fatalf("last item = %q, want %q", got, want)
+	}
+	if got, want := m.Session.Status, "added array item"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+
+	row, ok := m.Session.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after appending from batch row")
+	}
+	if row.IsBatch() || row.ArrayIndex != 101 {
+		t.Fatalf("CurrentRow() = %#v, want new array item row", row)
+	}
+
+	secondBatch := session.BatchRowID(items.ID, 100)
+	if !m.Session.ExpandedBatches[secondBatch] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true for second batch", secondBatch)
 	}
 }

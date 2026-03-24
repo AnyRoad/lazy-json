@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/session"
 	"github.com/anyroad/lazy-json/internal/source"
 )
 
@@ -59,5 +60,36 @@ func TestSearchFindsCollapsedNodesAndRevealsOnNavigation(t *testing.T) {
 	}
 	if !m.Session.Expanded[m.Doc.Root.Object[1].Value.Array[1].ID] {
 		t.Fatal("second collapsed search match was not revealed")
+	}
+}
+
+func TestSearchRevealsMatchingBatchInsideLongArray(t *testing.T) {
+	doc := testLongObjectArrayDoc(t, 150)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+	targetID := items.Array[137].Object[0].Value.ID
+
+	m.Session.Search.Query = "item-137"
+	m.Session.UpdateSearchHits(m.Doc)
+	if got, want := len(m.Session.SearchHits), 1; got != want {
+		t.Fatalf("SearchHits = %d, want %d", got, want)
+	}
+
+	m.Session.SelectNode(m.Doc.Root.ID)
+	if !m.Session.NextSearchHit(m.Doc, false) {
+		t.Fatal("NextSearchHit() = false, want true")
+	}
+	if got, want := m.Session.SelectedID, targetID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if !m.Session.Expanded[items.ID] {
+		t.Fatal("long array is not expanded after search reveal")
+	}
+
+	batchID := session.BatchRowID(items.ID, 100)
+	if !m.Session.ExpandedBatches[batchID] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true for second batch", batchID)
 	}
 }

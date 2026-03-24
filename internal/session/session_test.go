@@ -1,6 +1,8 @@
 package session
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/anyroad/lazy-json/internal/document"
@@ -19,6 +21,46 @@ func testDoc(t *testing.T) *document.Document {
 func testDocWithSiblingBranches(t *testing.T) *document.Document {
 	t.Helper()
 	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2},"tail":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func testLongScalarArrayDoc(t *testing.T, count int) *document.Document {
+	t.Helper()
+
+	var raw strings.Builder
+	raw.WriteString(`{"items":[`)
+	for idx := 0; idx < count; idx++ {
+		if idx > 0 {
+			raw.WriteByte(',')
+		}
+		raw.WriteString(fmt.Sprintf("%d", idx))
+	}
+	raw.WriteString(`],"tail":true}`)
+
+	doc, err := document.Parse([]byte(raw.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func testLongObjectArrayDoc(t *testing.T, count int) *document.Document {
+	t.Helper()
+
+	var raw strings.Builder
+	raw.WriteString(`{"items":[`)
+	for idx := 0; idx < count; idx++ {
+		if idx > 0 {
+			raw.WriteByte(',')
+		}
+		raw.WriteString(fmt.Sprintf(`{"title":"item-%d"}`, idx))
+	}
+	raw.WriteString(`],"tail":true}`)
+
+	doc, err := document.Parse([]byte(raw.String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +121,190 @@ func TestBuildRowsPreservesGlobalLineNumberGapsWhenCollapsed(t *testing.T) {
 	}
 	if got, want := s.Rows[s.RowIndex[tailID]].LineNumber, 10; got != want {
 		t.Fatalf("collapsed tail LineNumber = %d, want %d", got, want)
+	}
+}
+
+func TestBuildRowsBatchesArraysLongerThanThreshold(t *testing.T) {
+	shortDoc := testLongScalarArrayDoc(t, 100)
+	shortSession := New(shortDoc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	shortItems := shortDoc.Root.Object[0].Value
+	shortSession.Expanded[shortItems.ID] = true
+	shortSession.Refresh(shortDoc)
+
+	if got, want := len(shortSession.Rows), 103; got != want {
+		t.Fatalf("rows = %d, want %d for 100-item array", got, want)
+	}
+	if shortSession.Rows[2].IsBatch() {
+		t.Fatalf("Rows[2] = %#v, want direct item row for 100-item array", shortSession.Rows[2])
+	}
+
+	longDoc := testLongScalarArrayDoc(t, 101)
+	longSession := New(longDoc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	longItems := longDoc.Root.Object[0].Value
+	longSession.Expanded[longItems.ID] = true
+	longSession.Refresh(longDoc)
+
+	if got, want := len(longSession.Rows), 5; got != want {
+		t.Fatalf("rows = %d, want %d for 101-item array with batches", got, want)
+	}
+	if got, want := longSession.Rows[2].BatchLabel(), "[0-99]"; !longSession.Rows[2].IsBatch() || got != want {
+		t.Fatalf("first batch = %#v, want [0-99]", longSession.Rows[2])
+	}
+	if got, want := longSession.Rows[3].BatchLabel(), "[100-100]"; !longSession.Rows[3].IsBatch() || got != want {
+		t.Fatalf("second batch = %#v, want [100-100]", longSession.Rows[3])
+	}
+
+	largerDoc := testLongScalarArrayDoc(t, 250)
+	largerSession := New(largerDoc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	largerItems := largerDoc.Root.Object[0].Value
+	largerSession.Expanded[largerItems.ID] = true
+	largerSession.Refresh(largerDoc)
+
+	if got, want := len(largerSession.Rows), 6; got != want {
+		t.Fatalf("rows = %d, want %d for 250-item array with three batches", got, want)
+	}
+	if got, want := largerSession.Rows[2].BatchLabel(), "[0-99]"; got != want {
+		t.Fatalf("Rows[2].BatchLabel() = %q, want %q", got, want)
+	}
+	if got, want := largerSession.Rows[3].BatchLabel(), "[100-199]"; got != want {
+		t.Fatalf("Rows[3].BatchLabel() = %q, want %q", got, want)
+	}
+	if got, want := largerSession.Rows[4].BatchLabel(), "[200-249]"; got != want {
+		t.Fatalf("Rows[4].BatchLabel() = %q, want %q", got, want)
+	}
+}
+
+func TestMoveIntoAndCollapseLongArrayBatches(t *testing.T) {
+	doc := testLongScalarArrayDoc(t, 101)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+
+	s.SelectNode(items.ID)
+	s.MoveInto(doc)
+	s.Refresh(doc)
+	if !s.Expanded[items.ID] {
+		t.Fatal("items array is not expanded")
+	}
+
+	s.MoveInto(doc)
+	row, ok := s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after entering first batch")
+	}
+	if !row.IsBatch() || row.BatchLabel() != "[0-99]" {
+		t.Fatalf("CurrentRow() = %#v, want first batch row", row)
+	}
+
+	s.MoveInto(doc)
+	s.Refresh(doc)
+	row, ok = s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after expanding batch")
+	}
+	if !row.IsBatch() || !row.Expanded {
+		t.Fatalf("CurrentRow() = %#v, want expanded batch row", row)
+	}
+
+	s.MoveInto(doc)
+	row, ok = s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after entering first batch item")
+	}
+	if row.IsBatch() || row.ArrayIndex != 0 {
+		t.Fatalf("CurrentRow() = %#v, want first array item row", row)
+	}
+
+	s.CollapseSelected(doc)
+	s.Refresh(doc)
+	row, ok = s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after collapsing to batch")
+	}
+	if !row.IsBatch() || row.BatchLabel() != "[0-99]" {
+		t.Fatalf("CurrentRow() = %#v, want first batch row after collapse", row)
+	}
+
+	s.CollapseSelected(doc)
+	s.Refresh(doc)
+	row, ok = s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after closing batch")
+	}
+	if !row.IsBatch() || row.Expanded {
+		t.Fatalf("CurrentRow() = %#v, want collapsed batch row", row)
+	}
+
+	s.CollapseSelected(doc)
+	s.Refresh(doc)
+	row, ok = s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after returning to array")
+	}
+	if row.IsBatch() || row.NodeID != items.ID {
+		t.Fatalf("CurrentRow() = %#v, want items array row", row)
+	}
+}
+
+func TestSearchRevealExpandsMatchingLongArrayBatch(t *testing.T) {
+	doc := testLongObjectArrayDoc(t, 150)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+	targetID := items.Array[137].Object[0].Value.ID
+
+	s.Search.Query = "item-137"
+	s.UpdateSearchHits(doc)
+	if got, want := len(s.SearchHits), 1; got != want {
+		t.Fatalf("SearchHits = %d, want %d", got, want)
+	}
+
+	s.SelectNode(doc.Root.ID)
+	if !s.NextSearchHit(doc, false) {
+		t.Fatal("NextSearchHit() = false, want true")
+	}
+	if got, want := s.SelectedID, targetID; got != want {
+		t.Fatalf("SelectedID = %d, want %d", got, want)
+	}
+	if !s.Expanded[items.ID] {
+		t.Fatal("items array is not expanded after search reveal")
+	}
+
+	batchID := BatchRowID(items.ID, 100)
+	if !s.ExpandedBatches[batchID] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true for second batch", batchID)
+	}
+	if !s.Expanded[items.Array[137].ID] {
+		t.Fatal("matching array element container is not expanded after search reveal")
+	}
+
+	row, ok := s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after search reveal")
+	}
+	if row.IsBatch() || row.NodeID != targetID {
+		t.Fatalf("CurrentRow() = %#v, want matching title node row", row)
+	}
+}
+
+func TestRefreshReselectsVisibleParentWhenBatchRowDisappearsAfterEdit(t *testing.T) {
+	doc := testLongScalarArrayDoc(t, 101)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+
+	s.Expanded[items.ID] = true
+	s.SelectRowID(BatchRowID(items.ID, 100))
+	s.Refresh(doc)
+
+	if err := doc.Delete(items.Array[100].ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	s.Refresh(doc)
+
+	row, ok := s.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after batch row disappears")
+	}
+	if row.IsBatch() || row.NodeID != items.ID {
+		t.Fatalf("CurrentRow() = %#v, want items array row after batch disappears", row)
 	}
 }
 

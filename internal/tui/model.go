@@ -163,7 +163,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Session.SetError(msg.Err.Error())
 			return m, nil
 		}
-		if err := m.Doc.Replace(m.Session.SelectedID, msg.Node); err != nil {
+		targetID, err := m.selectedNodeID()
+		if err != nil {
+			m.Session.SetError(err.Error())
+			return m, nil
+		}
+		if err := m.Doc.Replace(targetID, msg.Node); err != nil {
 			m.Session.SetError(err.Error())
 			return m, nil
 		}
@@ -181,7 +186,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.Session.Dirty = true
-		m.Session.SelectedID = msg.TargetID
+		m.Session.SelectNode(msg.TargetID)
 		m.refresh()
 		m.Session.SetStatus("applied jq transform")
 		return m, nil
@@ -349,9 +354,9 @@ func (m *Model) startScalarEdit() tea.Cmd {
 }
 
 func (m *Model) startRename() tea.Cmd {
-	loc, ok := m.Doc.Find(m.Session.SelectedID)
-	if !ok {
-		m.Session.SetError("selected node not found")
+	loc, err := m.selectedLocation()
+	if err != nil {
+		m.Session.SetError(err.Error())
 		return nil
 	}
 	if loc.Parent == nil || loc.ParentKind != document.KindObject {
@@ -380,7 +385,12 @@ func (m *Model) startAdd() tea.Cmd {
 }
 
 func (m *Model) deleteSelected() tea.Cmd {
-	loc, ok := m.Doc.Find(m.Session.SelectedID)
+	nodeID, err := m.selectedNodeID()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	loc, ok := m.Doc.Find(nodeID)
 	if !ok {
 		m.Session.SetError("selected node not found")
 		return nil
@@ -408,12 +418,12 @@ func (m *Model) deleteSelected() tea.Cmd {
 			}
 		}
 	}
-	if err := m.Doc.Delete(m.Session.SelectedID); err != nil {
+	if err := m.Doc.Delete(nodeID); err != nil {
 		m.Session.SetError(err.Error())
 		return nil
 	}
 	m.Session.Dirty = true
-	m.Session.SelectedID = nextSelection
+	m.Session.SelectNode(nextSelection)
 	m.refresh()
 	m.Session.SetStatus("deleted node")
 	return nil

@@ -20,20 +20,23 @@ const (
 )
 
 type Session struct {
-	SelectedID document.NodeID
-	Expanded   map[document.NodeID]bool
-	Rows       []Row
-	RowIndex   map[document.NodeID]int
-	Dirty      bool
-	SourceKind source.Kind
-	SourcePath string
-	Mode       Mode
-	ThemeName  string
-	Help       bool
-	Search     SearchState
-	SearchHits []document.NodeID
-	Status     string
-	Error      string
+	SelectedID      document.NodeID
+	SelectedRowID   RowID
+	Expanded        map[document.NodeID]bool
+	ExpandedBatches map[RowID]bool
+	Rows            []Row
+	RowIndex        map[document.NodeID]int
+	RowKeyIndex     map[RowID]int
+	Dirty           bool
+	SourceKind      source.Kind
+	SourcePath      string
+	Mode            Mode
+	ThemeName       string
+	Help            bool
+	Search          SearchState
+	SearchHits      []document.NodeID
+	Status          string
+	Error           string
 }
 
 func New(doc *document.Document, src source.Input, themeName string) *Session {
@@ -46,58 +49,85 @@ func New(doc *document.Document, src source.Input, themeName string) *Session {
 		themeName = config.DefaultThemeName
 	}
 	s := &Session{
-		Expanded:   expanded,
-		SourceKind: src.Kind,
-		SourcePath: src.Path,
-		Mode:       ModeNormal,
-		ThemeName:  themeName,
+		Expanded:        expanded,
+		ExpandedBatches: map[RowID]bool{},
+		SourceKind:      src.Kind,
+		SourcePath:      src.Path,
+		Mode:            ModeNormal,
+		ThemeName:       themeName,
 	}
 	s.Refresh(doc)
 	return s
 }
 
-func (s *Session) Refresh(doc *document.Document) {
-	s.Rows = BuildRows(doc, s.Expanded)
-	s.RowIndex = make(map[document.NodeID]int, len(s.Rows))
-	for idx, row := range s.Rows {
-		s.RowIndex[row.NodeID] = idx
-	}
-	if len(s.Rows) == 0 {
-		s.SelectedID = 0
-		return
-	}
-	if s.SelectedID == 0 {
-		s.SelectedID = s.Rows[0].NodeID
-		return
-	}
-	if _, ok := s.RowIndex[s.SelectedID]; ok {
-		return
-	}
-	s.reselectVisible(doc)
+func (s *Session) SelectedRow() RowID {
+	return s.selectedRowID()
 }
 
-func (s *Session) reselectVisible(doc *document.Document) {
-	if doc == nil || doc.Root == nil {
+func (s *Session) SelectNode(nodeID document.NodeID) {
+	s.setSelectedRowID(NodeRowID(nodeID))
+}
+
+func (s *Session) SelectRowID(rowID RowID) {
+	s.setSelectedRowID(rowID)
+}
+
+func (s *Session) Refresh(doc *document.Document) {
+	if s.ExpandedBatches == nil {
+		s.ExpandedBatches = make(map[RowID]bool)
+	}
+
+	s.Rows = BuildRows(doc, s.Expanded, s.ExpandedBatches)
+	s.RowIndex = make(map[document.NodeID]int, len(s.Rows))
+	s.RowKeyIndex = make(map[RowID]int, len(s.Rows))
+	for idx, row := range s.Rows {
+		s.RowKeyIndex[row.ID] = idx
+		if !row.IsBatch() {
+			s.RowIndex[row.NodeID] = idx
+		}
+	}
+
+	selected := s.selectedRowID()
+	if len(s.Rows) == 0 {
 		s.SelectedID = 0
+		s.SelectedRowID = RowID{}
 		return
 	}
-	current := s.SelectedID
-	for current != 0 {
-		loc, ok := doc.Find(current)
-		if !ok || loc.Parent == nil {
+	if selected.IsZero() {
+		s.setSelectedRowID(s.Rows[0].ID)
+		return
+	}
+	if _, ok := s.RowKeyIndex[selected]; ok {
+		s.setSelectedRowID(selected)
+		return
+	}
+	s.reselectVisible(doc, selected)
+}
+
+func (s *Session) reselectVisible(doc *document.Document, selected RowID) {
+	if doc == nil || doc.Root == nil {
+		s.SelectedID = 0
+		s.SelectedRowID = RowID{}
+		return
+	}
+
+	current := selected
+	for !current.IsZero() {
+		parent, ok := logicalParentRowID(doc, current)
+		if !ok {
 			break
 		}
-		if _, visible := s.RowIndex[loc.Parent.ID]; visible {
-			s.SelectedID = loc.Parent.ID
+		if _, visible := s.RowKeyIndex[parent]; visible {
+			s.setSelectedRowID(parent)
 			return
 		}
-		current = loc.Parent.ID
+		current = parent
 	}
-	s.SelectedID = doc.Root.ID
+	s.setSelectedRowID(NodeRowID(doc.Root.ID))
 }
 
 func (s *Session) CurrentRow() (Row, bool) {
-	idx, ok := s.RowIndex[s.SelectedID]
+	idx, ok := s.RowKeyIndex[s.selectedRowID()]
 	if !ok {
 		return Row{}, false
 	}
@@ -116,25 +146,29 @@ func (s *Session) Move(delta int) {
 	if next >= len(s.Rows) {
 		next = len(s.Rows) - 1
 	}
-	s.SelectedID = s.Rows[next].NodeID
+	s.setSelectedRowID(s.Rows[next].ID)
 }
 
 func (s *Session) MoveToTop() {
 	if len(s.Rows) == 0 {
 		return
 	}
-	s.SelectedID = s.Rows[0].NodeID
+	s.setSelectedRowID(s.Rows[0].ID)
 }
 
 func (s *Session) MoveToBottom() {
 	if len(s.Rows) == 0 {
 		return
 	}
-	s.SelectedID = s.Rows[len(s.Rows)-1].NodeID
+	s.setSelectedRowID(s.Rows[len(s.Rows)-1].ID)
 }
 
 func (s *Session) ExpandSelected() {
-	s.Expanded[s.SelectedID] = true
+	row, ok := s.CurrentRow()
+	if !ok || !row.IsContainer {
+		return
+	}
+	s.expandRow(row)
 }
 
 func (s *Session) CollapseSelected(doc *document.Document) {
@@ -142,12 +176,12 @@ func (s *Session) CollapseSelected(doc *document.Document) {
 	if !ok {
 		return
 	}
-	if row.IsContainer && s.Expanded[s.SelectedID] {
-		delete(s.Expanded, s.SelectedID)
+	if row.IsContainer && row.Expanded {
+		s.collapseRow(row)
 		return
 	}
-	if row.ParentID != 0 {
-		s.SelectedID = row.ParentID
+	if !row.ParentRowID.IsZero() {
+		s.setSelectedRowID(row.ParentRowID)
 	}
 }
 
@@ -156,13 +190,13 @@ func (s *Session) MoveInto(doc *document.Document) {
 	if !ok {
 		return
 	}
-	if row.IsContainer && !s.Expanded[s.SelectedID] {
-		s.Expanded[s.SelectedID] = true
+	if row.IsContainer && !row.Expanded {
+		s.expandRow(row)
 		return
 	}
 	for _, candidate := range s.Rows {
-		if candidate.ParentID == row.NodeID {
-			s.SelectedID = candidate.NodeID
+		if candidate.ParentRowID == row.ID {
+			s.setSelectedRowID(candidate.ID)
 			return
 		}
 	}
@@ -170,6 +204,7 @@ func (s *Session) MoveInto(doc *document.Document) {
 
 func (s *Session) ExpandAll(doc *document.Document) {
 	s.Expanded = make(map[document.NodeID]bool)
+	s.ExpandedBatches = make(map[RowID]bool)
 	if doc == nil || doc.Root == nil {
 		return
 	}
@@ -177,11 +212,11 @@ func (s *Session) ExpandAll(doc *document.Document) {
 }
 
 func (s *Session) ExpandNearestArrayOneLevel(doc *document.Document) bool {
-	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
+	if doc == nil || doc.Root == nil {
 		return false
 	}
 
-	target, ok := nearestArrayTarget(doc, s.SelectedID)
+	target, ok := s.nearestArrayTarget(doc)
 	if !ok {
 		return false
 	}
@@ -198,11 +233,11 @@ func (s *Session) ExpandNearestArrayOneLevel(doc *document.Document) bool {
 }
 
 func (s *Session) CollapseNearestArrayElements(doc *document.Document) bool {
-	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
+	if doc == nil || doc.Root == nil {
 		return false
 	}
 
-	target, ok := nearestArrayTarget(doc, s.SelectedID)
+	target, ok := s.nearestArrayTarget(doc)
 	if !ok {
 		return false
 	}
@@ -213,6 +248,7 @@ func (s *Session) CollapseNearestArrayElements(doc *document.Document) bool {
 	for _, child := range target.Array {
 		collapseExpandedSubtree(child, s.Expanded)
 	}
+	s.deleteBatchExpansionsForArray(target.ID)
 	return true
 }
 
@@ -231,24 +267,6 @@ func expandAllContainers(node *document.Node, expanded map[document.NodeID]bool)
 			expandAllContainers(child, expanded)
 		}
 	}
-}
-
-func nearestArrayTarget(doc *document.Document, selectedID document.NodeID) (*document.Node, bool) {
-	currentID := selectedID
-	for currentID != 0 {
-		loc, ok := doc.Find(currentID)
-		if !ok || loc.Node == nil {
-			return nil, false
-		}
-		if loc.Node.Kind == document.KindArray {
-			return loc.Node, true
-		}
-		if loc.Parent == nil {
-			return nil, false
-		}
-		currentID = loc.Parent.ID
-	}
-	return nil, false
 }
 
 func collapseExpandedSubtree(node *document.Node, expanded map[document.NodeID]bool) {
@@ -270,6 +288,7 @@ func collapseExpandedSubtree(node *document.Node, expanded map[document.NodeID]b
 
 func (s *Session) CollapseAll(doc *document.Document) {
 	s.Expanded = make(map[document.NodeID]bool)
+	s.ExpandedBatches = make(map[RowID]bool)
 	if doc == nil || doc.Root == nil {
 		return
 	}
@@ -285,13 +304,19 @@ func (s *Session) RevealSelection(doc *document.Document, nodeID document.NodeID
 	if s.Expanded == nil {
 		s.Expanded = make(map[document.NodeID]bool)
 	}
+	if s.ExpandedBatches == nil {
+		s.ExpandedBatches = make(map[RowID]bool)
+	}
 	if doc.Root.IsContainer() {
 		s.Expanded[doc.Root.ID] = true
 	}
 	for _, ancestor := range ancestors {
 		s.Expanded[ancestor] = true
 	}
-	s.SelectedID = nodeID
+	for _, batchID := range batchRowAncestors(doc, nodeID) {
+		s.ExpandedBatches[batchID] = true
+	}
+	s.setSelectedRowID(NodeRowID(nodeID))
 	s.Refresh(doc)
 }
 
@@ -305,33 +330,26 @@ func (s *Session) RevealNode(doc *document.Document, nodeID document.NodeID) boo
 }
 
 func (s *Session) NextParentSibling(doc *document.Document) bool {
-	if doc == nil || doc.Root == nil || s.SelectedID == 0 {
-		return false
-	}
-	loc, ok := doc.Find(s.SelectedID)
-	if !ok || loc.Parent == nil {
+	row, ok := s.CurrentRow()
+	if !ok {
 		return false
 	}
 
-	currentID := loc.Parent.ID
-	for currentID != 0 {
-		current, ok := doc.Find(currentID)
-		if !ok || current.Parent == nil {
+	current := row
+	for !current.ParentRowID.IsZero() {
+		parentIndex, ok := s.RowKeyIndex[current.ParentRowID]
+		if !ok {
 			return false
 		}
-		switch current.ParentKind {
-		case document.KindObject:
-			if current.Index+1 < len(current.Parent.Object) {
-				s.SelectedID = current.Parent.Object[current.Index+1].Value.ID
-				return true
-			}
-		case document.KindArray:
-			if current.Index+1 < len(current.Parent.Array) {
-				s.SelectedID = current.Parent.Array[current.Index+1].ID
+		parent := s.Rows[parentIndex]
+		for idx := parentIndex + 1; idx < len(s.Rows); idx++ {
+			candidate := s.Rows[idx]
+			if candidate.ParentRowID == parent.ParentRowID {
+				s.setSelectedRowID(candidate.ID)
 				return true
 			}
 		}
-		currentID = current.Parent.ID
+		current = parent
 	}
 	return false
 }
@@ -355,7 +373,13 @@ func (s *Session) NextSearchHit(doc *document.Document, reverse bool) bool {
 	if len(s.SearchHits) == 0 {
 		return false
 	}
-	current := slices.Index(s.SearchHits, s.SelectedID)
+
+	currentID := document.NodeID(0)
+	if row, ok := s.CurrentRow(); ok && !row.IsBatch() {
+		currentID = row.NodeID
+	}
+
+	current := slices.Index(s.SearchHits, currentID)
 	targetID := document.NodeID(0)
 	if current == -1 {
 		if reverse {
@@ -399,4 +423,110 @@ func nodeAncestors(doc *document.Document, nodeID document.NodeID) ([]document.N
 	}
 	slices.Reverse(ancestors)
 	return ancestors, true
+}
+
+func batchRowAncestors(doc *document.Document, nodeID document.NodeID) []RowID {
+	if doc == nil || doc.Root == nil || nodeID == 0 {
+		return nil
+	}
+
+	batches := make([]RowID, 0, 2)
+	currentID := nodeID
+	for currentID != 0 {
+		loc, ok := doc.Find(currentID)
+		if !ok || loc.Parent == nil {
+			break
+		}
+		if loc.ParentKind == document.KindArray && shouldBatchArray(loc.Parent) {
+			batches = append(batches, BatchRowID(loc.Parent.ID, batchStartForIndex(loc.Index)))
+		}
+		currentID = loc.Parent.ID
+	}
+	return batches
+}
+
+func logicalParentRowID(doc *document.Document, rowID RowID) (RowID, bool) {
+	if doc == nil || doc.Root == nil || rowID.IsZero() {
+		return RowID{}, false
+	}
+	if rowID.IsBatch() {
+		return NodeRowID(rowID.NodeID()), true
+	}
+
+	loc, ok := doc.Find(rowID.NodeID())
+	if !ok || loc.Parent == nil {
+		return RowID{}, false
+	}
+	if loc.ParentKind == document.KindArray && shouldBatchArray(loc.Parent) {
+		return BatchRowID(loc.Parent.ID, batchStartForIndex(loc.Index)), true
+	}
+	return NodeRowID(loc.Parent.ID), true
+}
+
+func (s *Session) selectedRowID() RowID {
+	if s.SelectedID != 0 {
+		if !s.SelectedRowID.IsZero() && s.SelectedRowID.NodeID() == s.SelectedID {
+			return s.SelectedRowID
+		}
+		return NodeRowID(s.SelectedID)
+	}
+	return s.SelectedRowID
+}
+
+func (s *Session) setSelectedRowID(rowID RowID) {
+	s.SelectedRowID = rowID
+	s.SelectedID = rowID.NodeID()
+}
+
+func (s *Session) expandRow(row Row) {
+	if row.IsBatch() {
+		if s.ExpandedBatches == nil {
+			s.ExpandedBatches = make(map[RowID]bool)
+		}
+		s.ExpandedBatches[row.ID] = true
+		return
+	}
+	if s.Expanded == nil {
+		s.Expanded = make(map[document.NodeID]bool)
+	}
+	s.Expanded[row.NodeID] = true
+}
+
+func (s *Session) collapseRow(row Row) {
+	if row.IsBatch() {
+		delete(s.ExpandedBatches, row.ID)
+		return
+	}
+	delete(s.Expanded, row.NodeID)
+}
+
+func (s *Session) nearestArrayTarget(doc *document.Document) (*document.Node, bool) {
+	row, ok := s.CurrentRow()
+	if !ok {
+		return nil, false
+	}
+
+	currentID := row.NodeID
+	for currentID != 0 {
+		loc, ok := doc.Find(currentID)
+		if !ok || loc.Node == nil {
+			return nil, false
+		}
+		if loc.Node.Kind == document.KindArray {
+			return loc.Node, true
+		}
+		if loc.Parent == nil {
+			return nil, false
+		}
+		currentID = loc.Parent.ID
+	}
+	return nil, false
+}
+
+func (s *Session) deleteBatchExpansionsForArray(arrayID document.NodeID) {
+	for rowID := range s.ExpandedBatches {
+		if rowID.IsBatch() && rowID.NodeID() == arrayID {
+			delete(s.ExpandedBatches, rowID)
+		}
+	}
 }

@@ -38,16 +38,43 @@ func (m *Model) SelectPath(selectPath string) (document.PathResolution, error) {
 	return resolution, nil
 }
 
-func (m *Model) selectedNode() (*document.Node, error) {
-	loc, ok := m.Doc.Find(m.Session.SelectedID)
+func (m *Model) selectedNodeID() (document.NodeID, error) {
+	row, ok := m.Session.CurrentRow()
 	if !ok {
-		return nil, fmt.Errorf("selected node not found")
+		return 0, fmt.Errorf("selected row not found")
+	}
+	if row.IsBatch() {
+		return 0, fmt.Errorf("batch rows are navigation only")
+	}
+	return row.NodeID, nil
+}
+
+func (m *Model) selectedLocation() (document.Location, error) {
+	nodeID, err := m.selectedNodeID()
+	if err != nil {
+		return document.Location{}, err
+	}
+	loc, ok := m.Doc.Find(nodeID)
+	if !ok {
+		return document.Location{}, fmt.Errorf("selected node not found")
+	}
+	return loc, nil
+}
+
+func (m *Model) selectedNode() (*document.Node, error) {
+	loc, err := m.selectedLocation()
+	if err != nil {
+		return nil, err
 	}
 	return loc.Node, nil
 }
 
 func (m *Model) currentContainerTarget() (*document.Node, error) {
-	loc, ok := m.Doc.Find(m.Session.SelectedID)
+	row, ok := m.Session.CurrentRow()
+	if !ok {
+		return nil, fmt.Errorf("selected row not found")
+	}
+	loc, ok := m.Doc.Find(row.NodeID)
 	if !ok {
 		return nil, fmt.Errorf("selected node not found")
 	}
@@ -111,7 +138,12 @@ func (m *Model) submitPrompt() tea.Cmd {
 			m.Session.SetError("key cannot be empty")
 			return nil
 		}
-		if err := m.Doc.RenameKey(m.Session.SelectedID, value); err != nil {
+		targetID, err := m.selectedNodeID()
+		if err != nil {
+			m.Session.SetError(err.Error())
+			return nil
+		}
+		if err := m.Doc.RenameKey(targetID, value); err != nil {
 			m.Session.SetError(err.Error())
 			return nil
 		}
@@ -129,6 +161,11 @@ func (m *Model) submitPrompt() tea.Cmd {
 }
 
 func (m *Model) replaceSelected(input string, scalarOnly bool) tea.Cmd {
+	targetID, err := m.selectedNodeID()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
 	node, err := document.ParseNode([]byte(input))
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -138,7 +175,7 @@ func (m *Model) replaceSelected(input string, scalarOnly bool) tea.Cmd {
 		m.Session.SetError("expected a scalar JSON value")
 		return nil
 	}
-	if err := m.Doc.Replace(m.Session.SelectedID, node); err != nil {
+	if err := m.Doc.Replace(targetID, node); err != nil {
 		m.Session.SetError(err.Error())
 		return nil
 	}
@@ -180,8 +217,8 @@ func (m *Model) addObjectEntry(input string) tea.Cmd {
 	}
 	m.Session.Dirty = true
 	m.Session.Expanded[container.ID] = true
-	m.refresh()
-	m.Session.SelectedID = node.ID
+	m.Session.RevealNode(m.Doc, node.ID)
+	m.Session.UpdateSearchHits(m.Doc)
 	m.Session.SetStatus("added object field")
 	return nil
 }
@@ -207,8 +244,8 @@ func (m *Model) addArrayItem(input string) tea.Cmd {
 	}
 	m.Session.Dirty = true
 	m.Session.Expanded[container.ID] = true
-	m.refresh()
-	m.Session.SelectedID = node.ID
+	m.Session.RevealNode(m.Doc, node.ID)
+	m.Session.UpdateSearchHits(m.Doc)
 	m.Session.SetStatus("added array item")
 	return nil
 }
@@ -252,13 +289,17 @@ func (m *Model) copyPath() tea.Cmd {
 		m.Session.SetError("selected row not found")
 		return nil
 	}
+	if row.IsBatch() {
+		m.Session.SetError("batch rows do not have a JSON path")
+		return nil
+	}
 	return m.copyClipboardText("path", row.Path)
 }
 
 func (m *Model) copyKey() tea.Cmd {
-	loc, ok := m.Doc.Find(m.Session.SelectedID)
-	if !ok {
-		m.Session.SetError("selected node not found")
+	loc, err := m.selectedLocation()
+	if err != nil {
+		m.Session.SetError(err.Error())
 		return nil
 	}
 	if loc.Parent == nil || loc.ParentKind != document.KindObject {
@@ -481,7 +522,12 @@ func (m *Model) applyJQ(expr string, subtree bool) tea.Cmd {
 	}
 	targetID := m.Doc.Root.ID
 	if subtree {
-		targetID = m.Session.SelectedID
+		selectedID, err := m.selectedNodeID()
+		if err != nil {
+			m.Session.SetError(err.Error())
+			return nil
+		}
+		targetID = selectedID
 	}
 	loc, ok := m.Doc.Find(targetID)
 	if !ok {

@@ -77,7 +77,7 @@ func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int) []strin
 	rowLines := make([][]string, 0, len(m.Session.Rows))
 	totalLines := 0
 	selectedStart := 0
-	currentIndex, hasCurrent := m.Session.RowIndex[m.Session.SelectedID]
+	currentIndex, hasCurrent := m.Session.RowKeyIndex[m.Session.SelectedRow()]
 
 	for index, row := range m.Session.Rows {
 		rendered := m.renderRowLines(row, theme, width)
@@ -119,9 +119,17 @@ func (m *Model) renderRow(row session.Row, theme Theme) string {
 }
 
 func (m *Model) renderRowLines(row session.Row, theme Theme, width int) []string {
+	label := m.renderRowLabel(row, theme)
+	if row.IsBatch() {
+		line := label
+		if width > 0 {
+			line = trimWidth(line, width)
+		}
+		return []string{m.decorateRowLine(row, theme, line)}
+	}
+
 	loc, _ := m.Doc.Find(row.NodeID)
 	node := loc.Node
-	label := m.renderRowLabel(row, theme)
 	settings := m.ActiveSettings.WithDefaults()
 	if settings.WrapLongStrings && node.Kind == document.KindString {
 		return m.renderWrappedStringLines(row, theme, width, label, node.String, settings.ShowJSONPath)
@@ -148,6 +156,9 @@ func (m *Model) renderRowLabel(row session.Row, theme Theme) string {
 		}
 	}
 	label += indent + marker + " "
+	if row.IsBatch() {
+		return label + theme.Muted.Render(row.BatchLabel())
+	}
 	switch {
 	case row.Key != "":
 		label += theme.Key.Render(row.Key) + theme.Muted.Render(": ")
@@ -249,10 +260,10 @@ func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int
 }
 
 func (m *Model) decorateRowLine(row session.Row, theme Theme, line string) string {
-	if row.NodeID == m.Session.SelectedID {
+	if row.ID == m.Session.SelectedRow() {
 		return theme.Selected.Render(line)
 	}
-	if m.Session.HasSearchHit(row.NodeID) {
+	if !row.IsBatch() && m.Session.HasSearchHit(row.NodeID) {
 		return theme.SearchHit.Render(line)
 	}
 	return line

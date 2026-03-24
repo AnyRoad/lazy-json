@@ -15,6 +15,7 @@ The project name and keyboard-first workflow are inspired by [LazyVim](https://g
 - prefix shortcuts for clipboard actions, structural jumps, and tree-wide expand/collapse
 - ordered object rendering with syntax highlighting, built-in themes, and persistent editor settings
 - collapse and expand for objects and arrays
+- long arrays expand into 100-item batch rows instead of dumping every element at once
 - substring search with `/`, `n`, and `N`
 - structured editing for scalars, object keys, object fields, and array items
 - configurable pretty-printed JSON saves
@@ -87,6 +88,7 @@ You can add `--select '$.path.to.node'` to either startup form to open with a sp
 - `j` / `k`: move the selection up or down through visible rows
 - `h`: collapse the current container, or move to the parent row
 - `l`: expand the current container, or move into the first child
+- arrays longer than 100 items expand into batch rows such as `[0-99]`; use `l` to open a batch and `h` to close or leave it
 - `gg` / `G`: jump to the first or last visible row
 - `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found
 - `zR` / `zM`: expand all containers / collapse all containers except the root
@@ -106,6 +108,8 @@ The editor is structured, not freeform. You operate on the selected node:
 - `d`: delete the selected node
 - `E`: serialize the selected node or subtree into a temp file, open it in `$EDITOR`, and replace the node only if the edited JSON parses successfully
 
+Batch rows are navigation-only placeholders for long arrays. You can still press `a` on a batch row to append to its parent array, but edit, rename, delete, and subtree-copy actions require a real node selection.
+
 This keeps edits valid and avoids the complexity of embedding a full text editor into the TUI.
 
 ### Clipboard
@@ -124,7 +128,7 @@ All clipboard copies use structured JSON output rather than the rendered screen 
 - `n`: jump to the next match
 - `N`: jump to the previous match
 
-Search matches nodes across the whole document based on keys, scalar values, and rendered JSON paths. When `n` or `N` lands on a match inside a collapsed subtree, `lazy-json` automatically expands the necessary ancestors to reveal it.
+Search matches nodes across the whole document based on keys, scalar values, and rendered JSON paths. When `n` or `N` lands on a match inside a collapsed subtree or inside a long-array batch, `lazy-json` automatically expands the necessary ancestors and the matching batch to reveal it.
 
 ### Commands
 
