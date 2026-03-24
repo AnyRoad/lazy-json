@@ -49,7 +49,7 @@ func run(args []string) error {
 	if err := applyStartupSelection(model, startup.SelectPath); err != nil {
 		return err
 	}
-	opts := []tea.ProgramOption{}
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
 	if input.Kind == source.KindStdin {
 		opts = append(opts, tea.WithInputTTY())
 	}

@@ -18,6 +18,10 @@ func stripANSI(s string) string {
 	return ansiPattern.ReplaceAllString(s, "")
 }
 
+func splitViewLines(view string) []string {
+	return strings.Split(view, "\n")
+}
+
 func TestViewContainsKeyAndFooter(t *testing.T) {
 	m := testModel(t)
 	m.Width = 120
@@ -31,6 +35,53 @@ func TestViewContainsKeyAndFooter(t *testing.T) {
 	}
 	if !strings.Contains(view, "S open settings  t quick preview  ? help") {
 		t.Fatalf("View() missing settings hint: %q", view)
+	}
+}
+
+func TestViewPadsToViewportHeightAndAnchorsFooter(t *testing.T) {
+	m := testModel(t)
+	m.Width = 120
+	m.Height = 20
+
+	lines := splitViewLines(stripANSI(m.View()))
+	if got, want := len(lines), 20; got != want {
+		t.Fatalf("len(lines) = %d, want %d; lines=%q", got, want, lines)
+	}
+	if got := lines[len(lines)-1]; !strings.Contains(got, "sample.json") {
+		t.Fatalf("last line = %q, want footer on final row", got)
+	}
+}
+
+func TestViewKeepsFooterAbovePromptOnLastRow(t *testing.T) {
+	m := testModel(t)
+	m.Width = 120
+	m.Height = 20
+	m.openPrompt(promptCommand, ": ", "q")
+
+	lines := splitViewLines(stripANSI(m.View()))
+	if got, want := len(lines), 20; got != want {
+		t.Fatalf("len(lines) = %d, want %d; lines=%q", got, want, lines)
+	}
+	if got := lines[len(lines)-2]; !strings.Contains(got, "sample.json") {
+		t.Fatalf("second-last line = %q, want footer above prompt", got)
+	}
+	if got := lines[len(lines)-1]; !strings.Contains(got, ": q") {
+		t.Fatalf("last line = %q, want prompt on final row", got)
+	}
+}
+
+func TestHelpViewFitsViewportHeight(t *testing.T) {
+	m := testModel(t)
+	m.Width = 120
+	m.Height = 20
+	m.Session.Help = true
+
+	lines := splitViewLines(stripANSI(m.View()))
+	if got, want := len(lines), 20; got != want {
+		t.Fatalf("len(lines) = %d, want %d; lines=%q", got, want, lines)
+	}
+	if got := lines[0]; !strings.Contains(got, "Navigation") {
+		t.Fatalf("first line = %q, want help content", got)
 	}
 }
 

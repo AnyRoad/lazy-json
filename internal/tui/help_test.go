@@ -8,6 +8,8 @@ import (
 
 func TestHelpView(t *testing.T) {
 	m := testModel(t)
+	m.Width = 120
+	m.Height = 80
 	help := m.helpView()
 	if !strings.Contains(help, "Navigation") {
 		t.Fatalf("helpView() = %q", help)

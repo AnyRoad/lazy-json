@@ -24,6 +24,15 @@ func (m *Model) View() string {
 	}
 
 	theme := m.theme()
+	width, height := m.viewportSize()
+	view := m.documentView(theme, width, height)
+	if m.settingsOpen() {
+		return m.renderSettingsOverlay(view, theme, width, height)
+	}
+	return view
+}
+
+func (m *Model) viewportSize() (int, int) {
 	width := m.Width
 	if width <= 0 {
 		width = 100
@@ -32,24 +41,31 @@ func (m *Model) View() string {
 	if height <= 0 {
 		height = 24
 	}
-	view := m.documentView(theme, width, height)
-	if m.settingsOpen() {
-		return m.renderSettingsOverlay(view, theme, width, height)
-	}
-	return view
+	return width, height
 }
 
 func (m *Model) documentView(theme Theme, width, height int) string {
-	bodyHeight := height - 2
+	reservedRows := m.documentReservedRows()
+	bodyHeight := height - reservedRows
 	if bodyHeight < 1 {
 		bodyHeight = 1
 	}
 	lines := m.visibleDocumentLines(theme, width, bodyHeight)
+	if height > reservedRows {
+		lines = padLinesToHeight(lines, bodyHeight)
+	}
 	lines = append(lines, trimWidth(m.renderFooter(theme), width))
 	if m.promptKind != promptNone {
 		lines = append(lines, trimWidth(theme.Prompt.Render(m.prompt.View()), width))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m *Model) documentReservedRows() int {
+	if m.promptKind != promptNone {
+		return 2
+	}
+	return 1
 }
 
 func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int) []string {
@@ -303,6 +319,27 @@ func flattenLines(groups [][]string) []string {
 		lines = append(lines, group...)
 	}
 	return lines
+}
+
+func fitLinesToHeight(lines []string, height int) []string {
+	if height <= 0 {
+		return lines
+	}
+	if len(lines) > height {
+		return lines[:height]
+	}
+	return padLinesToHeight(lines, height)
+}
+
+func padLinesToHeight(lines []string, height int) []string {
+	if height <= 0 || len(lines) >= height {
+		return lines
+	}
+	padded := append([]string{}, lines...)
+	for len(padded) < height {
+		padded = append(padded, "")
+	}
+	return padded
 }
 
 func sliceVisibleLines(groups [][]string, start, end int) []string {
