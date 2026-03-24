@@ -38,6 +38,7 @@ type SaveIndent struct {
 
 type Settings struct {
 	Theme           string     `json:"theme"`
+	ShowLineNumbers bool       `json:"show_line_numbers"`
 	WrapLongStrings bool       `json:"wrap_long_strings"`
 	ShowJSONPath    bool       `json:"show_json_path"`
 	SaveIndent      SaveIndent `json:"save_indent"`
@@ -103,6 +104,7 @@ func (i SaveIndent) Label() string {
 func DefaultSettings() Settings {
 	return Settings{
 		Theme:           DefaultThemeName,
+		ShowLineNumbers: false,
 		WrapLongStrings: false,
 		ShowJSONPath:    true,
 		SaveIndent:      DefaultSaveIndent(),
@@ -129,9 +131,15 @@ func (s Settings) WithShowJSONPath(value bool) Settings {
 	return s
 }
 
+func (s Settings) WithShowLineNumbers(value bool) Settings {
+	s.ShowLineNumbers = value
+	return s
+}
+
 func (s *Settings) UnmarshalJSON(data []byte) error {
 	type rawSettings struct {
 		Theme           string     `json:"theme"`
+		ShowLineNumbers bool       `json:"show_line_numbers"`
 		WrapLongStrings bool       `json:"wrap_long_strings"`
 		ShowJSONPath    *bool      `json:"show_json_path"`
 		SaveIndent      SaveIndent `json:"save_indent"`
@@ -143,6 +151,7 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 	}
 
 	s.Theme = raw.Theme
+	s.ShowLineNumbers = raw.ShowLineNumbers
 	s.WrapLongStrings = raw.WrapLongStrings
 	s.SaveIndent = raw.SaveIndent
 	if raw.ShowJSONPath != nil {

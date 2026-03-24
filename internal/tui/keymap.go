@@ -33,6 +33,7 @@ Settings
   s         save settings to settings.json
   persist   saved settings restore on next launch
   themes    built-ins + config themes/*.json
+  lines     global tree row-number gutter can be toggled
   paths     JSON path display can be toggled
   wrap      long strings setting affects display only
   indent    pretty save/print/copy uses selected indent

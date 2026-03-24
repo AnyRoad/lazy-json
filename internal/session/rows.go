@@ -9,6 +9,7 @@ import (
 
 type Row struct {
 	Index       int
+	LineNumber  int
 	NodeID      document.NodeID
 	ParentID    document.NodeID
 	Depth       int
@@ -26,54 +27,49 @@ func BuildRows(doc *document.Document, expanded map[document.NodeID]bool) []Row 
 		return nil
 	}
 	rows := []Row{}
-	buildRows(doc.Root, 0, "", -1, 0, expanded, &rows)
+	lineNumber := 0
+	buildRows(doc.Root, 0, "", -1, 0, "", expanded, true, &lineNumber, &rows)
 	for idx := range rows {
 		rows[idx].Index = idx
 	}
 	return rows
 }
 
-func buildRows(node *document.Node, depth int, key string, arrayIndex int, parentID document.NodeID, expanded map[document.NodeID]bool, rows *[]Row) {
+func buildRows(node *document.Node, depth int, key string, arrayIndex int, parentID document.NodeID, parentPath string, expanded map[document.NodeID]bool, visible bool, lineNumber *int, rows *[]Row) {
+	path := "$"
+	if parentID != 0 {
+		path = appendRowPath(parentPath, key, arrayIndex)
+	}
+	*lineNumber++
+
 	row := Row{
+		LineNumber:  *lineNumber,
 		NodeID:      node.ID,
 		ParentID:    parentID,
 		Depth:       depth,
 		Key:         key,
 		ArrayIndex:  arrayIndex,
-		Path:        joinPath(parentID, key, arrayIndex, rows),
+		Path:        path,
 		Kind:        node.Kind,
 		IsContainer: node.IsContainer(),
 		Expanded:    expanded[node.ID],
 		Summary:     node.Summary(),
 	}
-	*rows = append(*rows, row)
-	if !row.IsContainer || !row.Expanded {
-		return
+	if visible {
+		*rows = append(*rows, row)
 	}
+
+	childVisible := visible && row.IsContainer && row.Expanded
 	switch node.Kind {
 	case document.KindObject:
 		for _, entry := range node.Object {
-			buildRows(entry.Value, depth+1, entry.Key, -1, node.ID, expanded, rows)
+			buildRows(entry.Value, depth+1, entry.Key, -1, node.ID, path, expanded, childVisible, lineNumber, rows)
 		}
 	case document.KindArray:
 		for idx, child := range node.Array {
-			buildRows(child, depth+1, "", idx, node.ID, expanded, rows)
+			buildRows(child, depth+1, "", idx, node.ID, path, expanded, childVisible, lineNumber, rows)
 		}
 	}
-}
-
-func joinPath(parentID document.NodeID, key string, arrayIndex int, rows *[]Row) string {
-	if parentID == 0 {
-		return "$"
-	}
-	parentPath := "$"
-	for i := len(*rows) - 1; i >= 0; i-- {
-		if (*rows)[i].NodeID == parentID {
-			parentPath = (*rows)[i].Path
-			break
-		}
-	}
-	return appendRowPath(parentPath, key, arrayIndex)
 }
 
 func appendRowPath(parentPath, key string, arrayIndex int) string {

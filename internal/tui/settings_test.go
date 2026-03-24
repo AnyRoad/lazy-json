@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -122,6 +123,8 @@ func TestSettingsModalPreviewsAndSavesJSONPath(t *testing.T) {
 	m = updated.(*Model)
 	updated, _ = m.Update(specialKey(tea.KeyDown))
 	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
 	updated, _ = m.Update(specialKey(tea.KeyRight))
 	m = updated.(*Model)
 
@@ -148,6 +151,48 @@ func TestSettingsModalPreviewsAndSavesJSONPath(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `"show_json_path": false`) {
 		t.Fatalf("settings file = %q, want saved JSON path setting", string(data))
+	}
+}
+
+func TestSettingsModalPreviewsAndSavesLineNumbers(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	m := testModelWithOptions(t, ModelOptions{
+		Settings:     config.DefaultSettings(),
+		SettingsPath: paths.SettingsFile,
+	})
+	m.Width = 120
+	m.Height = 20
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+
+	if !m.ActiveSettings.WithDefaults().ShowLineNumbers {
+		t.Fatal("ActiveSettings.ShowLineNumbers = false, want true during preview")
+	}
+	if m.Settings.WithDefaults().ShowLineNumbers {
+		t.Fatal("Settings.ShowLineNumbers = true, want false before save")
+	}
+	if !regexp.MustCompile(`(?m)^\s*1\s+▾ \{2\}`).MatchString(stripANSI(m.View())) {
+		t.Fatalf("View() = %q, want visible line-number gutter during preview", stripANSI(m.View()))
+	}
+
+	updated, _ = m.Update(key("s"))
+	m = updated.(*Model)
+
+	if !m.Settings.WithDefaults().ShowLineNumbers {
+		t.Fatal("Settings.ShowLineNumbers = false, want true after save")
+	}
+
+	data, err := os.ReadFile(paths.SettingsFile)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", paths.SettingsFile, err)
+	}
+	if !strings.Contains(string(data), `"show_line_numbers": true`) {
+		t.Fatalf("settings file = %q, want saved line-number setting", string(data))
 	}
 }
 

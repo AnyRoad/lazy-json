@@ -43,6 +43,9 @@ func TestLoadSettingsDefaultFallback(t *testing.T) {
 	if got, want := settings.Theme, DefaultThemeName; got != want {
 		t.Fatalf("Theme = %q, want %q", got, want)
 	}
+	if settings.ShowLineNumbers {
+		t.Fatal("ShowLineNumbers = true, want false when setting is omitted")
+	}
 	if !settings.ShowJSONPath {
 		t.Fatal("ShowJSONPath = false, want true when setting is omitted")
 	}
@@ -91,6 +94,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	paths := PathsFromUserConfigDir(t.TempDir())
 	want := Settings{
 		Theme:           "custom",
+		ShowLineNumbers: true,
 		WrapLongStrings: true,
 		SaveIndent:      SaveIndent{Kind: IndentKindTabs},
 	}.WithShowJSONPath(false).WithDefaults()
@@ -110,6 +114,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	data := string(readFile(t, paths.SettingsFile))
 	if !strings.Contains(data, "\"theme\": \"custom\"") {
 		t.Fatalf("settings file = %q, want persisted theme", data)
+	}
+	if !strings.Contains(data, "\"show_line_numbers\": true") {
+		t.Fatalf("settings file = %q, want persisted line-number setting", data)
 	}
 	if !strings.Contains(data, "\"wrap_long_strings\": true") {
 		t.Fatalf("settings file = %q, want persisted wrap setting", data)

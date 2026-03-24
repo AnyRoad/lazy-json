@@ -477,6 +477,8 @@ func TestSettingsModalPreviewsWrapAndIndentWithoutSaving(t *testing.T) {
 	m = updated.(*Model)
 	updated, _ = m.Update(specialKey(tea.KeyDown))
 	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
 	updated, _ = m.Update(specialKey(tea.KeyRight))
 	m = updated.(*Model)
 

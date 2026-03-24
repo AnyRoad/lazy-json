@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -120,7 +121,7 @@ func (m *Model) renderRow(row session.Row, theme Theme) string {
 func (m *Model) renderRowLines(row session.Row, theme Theme, width int) []string {
 	loc, _ := m.Doc.Find(row.NodeID)
 	node := loc.Node
-	label := renderRowLabel(row, theme)
+	label := m.renderRowLabel(row, theme)
 	settings := m.ActiveSettings.WithDefaults()
 	if settings.WrapLongStrings && node.Kind == document.KindString {
 		return m.renderWrappedStringLines(row, theme, width, label, node.String, settings.ShowJSONPath)
@@ -135,7 +136,8 @@ func (m *Model) renderRowLines(row session.Row, theme Theme, width int) []string
 	return []string{m.decorateRowLine(row, theme, line)}
 }
 
-func renderRowLabel(row session.Row, theme Theme) string {
+func (m *Model) renderRowLabel(row session.Row, theme Theme) string {
+	label := m.renderLineNumberPrefix(row, theme)
 	indent := strings.Repeat("  ", row.Depth)
 	marker := " "
 	if row.IsContainer {
@@ -145,7 +147,7 @@ func renderRowLabel(row session.Row, theme Theme) string {
 			marker = "▸"
 		}
 	}
-	label := indent + marker + " "
+	label += indent + marker + " "
 	switch {
 	case row.Key != "":
 		label += theme.Key.Render(row.Key) + theme.Muted.Render(": ")
@@ -153,6 +155,30 @@ func renderRowLabel(row session.Row, theme Theme) string {
 		label += theme.Muted.Render(fmt.Sprintf("[%d]: ", row.ArrayIndex))
 	}
 	return label
+}
+
+func (m *Model) lineNumberWidth() int {
+	settings := m.ActiveSettings.WithDefaults()
+	if !settings.ShowLineNumbers || m.Session == nil || len(m.Session.Rows) == 0 {
+		return 0
+	}
+	return len(strconv.Itoa(m.Session.Rows[len(m.Session.Rows)-1].LineNumber))
+}
+
+func (m *Model) renderLineNumberPrefix(row session.Row, theme Theme) string {
+	width := m.lineNumberWidth()
+	if width == 0 {
+		return ""
+	}
+	return theme.Muted.Render(fmt.Sprintf("%*d ", width, row.LineNumber))
+}
+
+func (m *Model) lineNumberBlankPrefix() string {
+	width := m.lineNumberWidth()
+	if width == 0 {
+		return ""
+	}
+	return strings.Repeat(" ", width+1)
 }
 
 func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int, label, value string, showJSONPath bool) []string {
@@ -216,7 +242,7 @@ func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int
 		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(line, width)))
 	}
 	if pathWidth >= wrapWidth {
-		pathPrefix := strings.Repeat("  ", row.Depth) + "  "
+		pathPrefix := m.lineNumberBlankPrefix() + strings.Repeat("  ", row.Depth) + "  "
 		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(pathPrefix+theme.Muted.Render(row.Path), width)))
 	}
 	return lines

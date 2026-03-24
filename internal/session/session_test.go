@@ -37,10 +37,48 @@ func TestRefreshAndPaths(t *testing.T) {
 	if got := s.Rows[2].Path; got != "$.items" {
 		t.Fatalf("path = %q", got)
 	}
+	if got := s.Rows[2].LineNumber; got != 3 {
+		t.Fatalf("LineNumber = %d, want 3", got)
+	}
 	s.Expanded[doc.Root.Object[1].Value.ID] = true
 	s.Refresh(doc)
 	if got := s.Rows[3].Path; got != "$.items[0]" {
 		t.Fatalf("nested path = %q", got)
+	}
+	if got := s.Rows[3].LineNumber; got != 4 {
+		t.Fatalf("nested LineNumber = %d, want 4", got)
+	}
+}
+
+func TestBuildRowsPreservesGlobalLineNumberGapsWhenCollapsed(t *testing.T) {
+	doc := testDocWithSiblingBranches(t)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	itemsID := doc.Root.Object[1].Value.ID
+	metaID := doc.Root.Object[2].Value.ID
+	tailID := doc.Root.Object[3].Value.ID
+
+	s.Expanded[itemsID] = true
+	s.Expanded[doc.Root.Object[1].Value.Array[0].ID] = true
+	s.Expanded[doc.Root.Object[1].Value.Array[1].ID] = true
+	s.Expanded[metaID] = true
+	s.Refresh(doc)
+
+	if got, want := s.Rows[s.RowIndex[tailID]].LineNumber, 10; got != want {
+		t.Fatalf("expanded tail LineNumber = %d, want %d", got, want)
+	}
+
+	delete(s.Expanded, itemsID)
+	delete(s.Expanded, metaID)
+	s.Refresh(doc)
+
+	if got, want := s.Rows[s.RowIndex[itemsID]].LineNumber, 3; got != want {
+		t.Fatalf("collapsed items LineNumber = %d, want %d", got, want)
+	}
+	if got, want := s.Rows[s.RowIndex[metaID]].LineNumber, 8; got != want {
+		t.Fatalf("collapsed meta LineNumber = %d, want %d", got, want)
+	}
+	if got, want := s.Rows[s.RowIndex[tailID]].LineNumber, 10; got != want {
+		t.Fatalf("collapsed tail LineNumber = %d, want %d", got, want)
 	}
 }
 

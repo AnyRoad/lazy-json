@@ -38,6 +38,68 @@ func TestViewContainsKeyAndFooter(t *testing.T) {
 	}
 }
 
+func TestViewShowsGlobalLineNumberGutter(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"tail":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Settings: config.DefaultSettings().WithShowLineNumbers(true),
+	})
+	items := doc.Root.Object[1].Value
+	m.Session.Expanded[items.ID] = true
+	m.Session.Refresh(doc)
+	m.Width = 120
+	m.Height = 20
+
+	lines := splitViewLines(stripANSI(m.View()))
+	if got := lines[0]; !regexp.MustCompile(`^1\s+▾ \{3\}`).MatchString(got) {
+		t.Fatalf("first line = %q, want root line number gutter", got)
+	}
+	if got := lines[1]; !regexp.MustCompile(`^2\s+name: "Ada"`).MatchString(got) {
+		t.Fatalf("second line = %q, want sequential visible gutter", got)
+	}
+	if got := lines[3]; !regexp.MustCompile(`^4\s+▸ \[0\]: \{1\}`).MatchString(got) {
+		t.Fatalf("fourth line = %q, want child line number gutter", got)
+	}
+	if got := lines[5]; !regexp.MustCompile(`^\s*8\s+tail: true`).MatchString(got) {
+		t.Fatalf("sixth line = %q, want later visible row number", got)
+	}
+}
+
+func TestViewPreservesGlobalLineNumberGapsWhenCollapsed(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"Ada","items":[{"title":"alpha"},{"title":"beta"}],"meta":{"count":2},"tail":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Settings: config.DefaultSettings().WithShowLineNumbers(true),
+	})
+	items := doc.Root.Object[1].Value
+	meta := doc.Root.Object[2].Value
+	m.Session.Expanded[items.ID] = true
+	m.Session.Expanded[items.Array[0].ID] = true
+	m.Session.Expanded[items.Array[1].ID] = true
+	m.Session.Expanded[meta.ID] = true
+	m.Session.Refresh(doc)
+	delete(m.Session.Expanded, items.ID)
+	delete(m.Session.Expanded, meta.ID)
+	m.Session.Refresh(doc)
+	m.Width = 120
+	m.Height = 20
+
+	lines := splitViewLines(stripANSI(m.View()))
+	if got := lines[2]; !regexp.MustCompile(`^\s*3\s+▸ items: \[2\]`).MatchString(got) {
+		t.Fatalf("items line = %q, want global line number 3", got)
+	}
+	if got := lines[3]; !regexp.MustCompile(`^\s*8\s+▸ meta: \{1\}`).MatchString(got) {
+		t.Fatalf("meta line = %q, want global line number gap", got)
+	}
+	if got := lines[4]; !regexp.MustCompile(`^\s*10\s+tail: true`).MatchString(got) {
+		t.Fatalf("tail line = %q, want global line number gap", got)
+	}
+}
+
 func TestViewPadsToViewportHeightAndAnchorsFooter(t *testing.T) {
 	m := testModel(t)
 	m.Width = 120
@@ -290,6 +352,35 @@ func TestRenderRowLinesWrapLongStrings(t *testing.T) {
 	}
 }
 
+func TestRenderRowLinesShowsLineNumberOnlyOnFirstWrappedLine(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"abcdefghijklmnopqrstuvwxyz"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Settings: config.DefaultSettings().WithShowLineNumbers(true),
+	})
+	row := m.Session.Rows[1]
+	theme := m.theme()
+	m.ActiveSettings.WrapLongStrings = true
+
+	lines := m.renderRowLines(row, theme, 20)
+	if len(lines) < 2 {
+		t.Fatalf("len(lines) = %d, want at least 2", len(lines))
+	}
+
+	first := stripANSI(lines[0])
+	if !regexp.MustCompile(`^2\s+name: `).MatchString(first) {
+		t.Fatalf("first line = %q, want line number gutter", first)
+	}
+	for _, line := range lines[1:] {
+		stripped := stripANSI(line)
+		if regexp.MustCompile(`^2\s+`).MatchString(stripped) {
+			t.Fatalf("continuation line = %q, want blank gutter instead of repeated line number", stripped)
+		}
+	}
+}
+
 func TestRenderRowLinesHideJSONPath(t *testing.T) {
 	doc, err := document.Parse([]byte(`{"name":"abcdefghijklmnopqrstuvwxyz"}`))
 	if err != nil {
@@ -314,5 +405,25 @@ func TestRenderRowLinesHideJSONPath(t *testing.T) {
 		if strings.Contains(stripANSI(line), "$.name") {
 			t.Fatalf("wrapped line = %q, want JSON path hidden", stripANSI(line))
 		}
+	}
+}
+
+func TestViewShowsLineNumbersWithoutJSONPath(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"Ada"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Settings: config.DefaultSettings().WithShowLineNumbers(true).WithShowJSONPath(false),
+	})
+	m.Width = 120
+	m.Height = 20
+
+	view := stripANSI(m.View())
+	if !regexp.MustCompile(`(?m)^2\s+name: "Ada"$`).MatchString(view) {
+		t.Fatalf("View() = %q, want line number without JSON path", view)
+	}
+	if strings.Contains(view, "$.name") {
+		t.Fatalf("View() = %q, want JSON path hidden while line numbers remain visible", view)
 	}
 }
