@@ -151,9 +151,10 @@ Search matches nodes across the whole document based on keys, scalar values, and
 
 ### Settings
 
-Press `S` or run `:settings` to open the settings dialog. The dialog currently exposes three rows:
+Press `S` or run `:settings` to open the settings dialog. The dialog currently exposes four rows:
 
 - `Theme`: cycle built-in themes first and then valid external themes from your config directory
+- `JSON path`: toggle whether rendered rows show the selected node path
 - `Long strings`: toggle wrapping for displayed string scalar values only
 - `Save indent`: choose `spaces:2`, `spaces:3`, `spaces:4`, or `tabs` for pretty JSON output
 
@@ -165,9 +166,9 @@ Inside the dialog:
 - `s`: save the current settings to `settings.json`
 - `esc`: close the dialog without writing to disk
 
-Theme previews and long-string wrapping apply immediately to the current session. The current save-indent setting also applies immediately to later pretty JSON output from `:w`, `:x`, `:print`, `ys`, and `yj`. Theme, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.
+Theme previews, JSON-path visibility, and long-string wrapping apply immediately to the current session. The current save-indent setting also applies immediately to later pretty JSON output from `:w`, `:x`, `:print`, `ys`, and `yj`. Theme, JSON-path visibility, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.
 
-`lazy-json` stores theme, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`. The exact base directory follows `os.UserConfigDir()` for your platform; for example, on Linux this is typically `~/.config/lazy-json/settings.json` and `~/.config/lazy-json/themes/`.
+`lazy-json` stores theme, JSON-path visibility, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`. The exact base directory follows `os.UserConfigDir()` for your platform; for example, on Linux this is typically `~/.config/lazy-json/settings.json` and `~/.config/lazy-json/themes/`.
 
 External theme files are JSON objects with a required `name` plus optional style slots such as `key`, `string`, `number`, `bool`, `null`, `muted`, `selected`, `search_hit`, `status`, `error`, `border`, `help`, and `prompt`. Each slot supports `foreground`, optional `background`, and optional `bold`. For example:
 

@@ -57,6 +57,9 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, "themes    built-ins + config themes/*.json") {
 		t.Fatalf("helpView() = %q, want external theme help", help)
 	}
+	if !strings.Contains(help, "paths     JSON path display can be toggled") {
+		t.Fatalf("helpView() = %q, want JSON path settings help", help)
+	}
 	if !strings.Contains(help, ":settings open settings dialog") {
 		t.Fatalf("helpView() = %q, want settings command", help)
 	}
@@ -110,11 +113,12 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"- `:expand-all`: expand every object and array in the document",
 		"- `:next-parent-sibling`: jump to the next sibling of the selected node's parent, climbing ancestors as needed",
 		"- `s`: save the current settings to `settings.json`",
-		"`lazy-json` stores theme, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.",
-		"Theme, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.",
+		"`lazy-json` stores theme, JSON-path visibility, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.",
+		"Theme, JSON-path visibility, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.",
 		"- `left` / `right` or `h` / `l`: change the selected setting",
 		"- `up` / `down` or `j` / `k`: move between settings rows",
 		"- `enter` / `space`: cycle the selected setting",
+		"- `JSON path`: toggle whether rendered rows show the selected node path",
 		"- `Long strings`: toggle wrapping for displayed string scalar values only",
 		"- `Save indent`: choose `spaces:2`, `spaces:3`, `spaces:4`, or `tabs` for pretty JSON output",
 	}

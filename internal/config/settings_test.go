@@ -43,6 +43,9 @@ func TestLoadSettingsDefaultFallback(t *testing.T) {
 	if got, want := settings.Theme, DefaultThemeName; got != want {
 		t.Fatalf("Theme = %q, want %q", got, want)
 	}
+	if !settings.ShowJSONPath {
+		t.Fatal("ShowJSONPath = false, want true when setting is omitted")
+	}
 	if len(warnings) != 0 {
 		t.Fatalf("warnings = %v, want none", warnings)
 	}
@@ -90,7 +93,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 		Theme:           "custom",
 		WrapLongStrings: true,
 		SaveIndent:      SaveIndent{Kind: IndentKindTabs},
-	}.WithDefaults()
+	}.WithShowJSONPath(false).WithDefaults()
 
 	if err := SaveSettings(paths.SettingsFile, want); err != nil {
 		t.Fatalf("SaveSettings() error = %v", err)
@@ -110,6 +113,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if !strings.Contains(data, "\"wrap_long_strings\": true") {
 		t.Fatalf("settings file = %q, want persisted wrap setting", data)
+	}
+	if !strings.Contains(data, "\"show_json_path\": false") {
+		t.Fatalf("settings file = %q, want persisted JSON path setting", data)
 	}
 	if !strings.Contains(data, "\"kind\": \"tabs\"") {
 		t.Fatalf("settings file = %q, want persisted tabs indent", data)

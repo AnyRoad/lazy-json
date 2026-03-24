@@ -109,6 +109,48 @@ func TestSettingsCommandSavesPreviewedTheme(t *testing.T) {
 	}
 }
 
+func TestSettingsModalPreviewsAndSavesJSONPath(t *testing.T) {
+	paths := config.PathsFromUserConfigDir(t.TempDir())
+	m := testModelWithOptions(t, ModelOptions{
+		Settings:     config.DefaultSettings(),
+		SettingsPath: paths.SettingsFile,
+	})
+	m.Width = 120
+	m.Height = 20
+
+	updated, _ := m.Update(key("S"))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyDown))
+	m = updated.(*Model)
+	updated, _ = m.Update(specialKey(tea.KeyRight))
+	m = updated.(*Model)
+
+	if m.ActiveSettings.WithDefaults().ShowJSONPath {
+		t.Fatal("ActiveSettings.ShowJSONPath = true, want false during preview")
+	}
+	if !m.Settings.WithDefaults().ShowJSONPath {
+		t.Fatal("Settings.ShowJSONPath = false, want true before save")
+	}
+	if strings.Contains(stripANSI(m.View()), "$.name") {
+		t.Fatalf("View() = %q, want hidden JSON path during preview", stripANSI(m.View()))
+	}
+
+	updated, _ = m.Update(key("s"))
+	m = updated.(*Model)
+
+	if m.Settings.WithDefaults().ShowJSONPath {
+		t.Fatal("Settings.ShowJSONPath = true, want false after save")
+	}
+
+	data, err := os.ReadFile(paths.SettingsFile)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", paths.SettingsFile, err)
+	}
+	if !strings.Contains(string(data), `"show_json_path": false`) {
+		t.Fatalf("settings file = %q, want saved JSON path setting", string(data))
+	}
+}
+
 func TestSettingsSaveFailureKeepsDialogOpen(t *testing.T) {
 	blockedPath := filepath.Join(t.TempDir(), "blocked")
 	if err := os.Mkdir(blockedPath, 0o755); err != nil {

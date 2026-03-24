@@ -105,10 +105,14 @@ func (m *Model) renderRowLines(row session.Row, theme Theme, width int) []string
 	loc, _ := m.Doc.Find(row.NodeID)
 	node := loc.Node
 	label := renderRowLabel(row, theme)
-	if m.ActiveSettings.WithDefaults().WrapLongStrings && node.Kind == document.KindString {
-		return m.renderWrappedStringLines(row, theme, width, label, node.String)
+	settings := m.ActiveSettings.WithDefaults()
+	if settings.WrapLongStrings && node.Kind == document.KindString {
+		return m.renderWrappedStringLines(row, theme, width, label, node.String, settings.ShowJSONPath)
 	}
-	line := label + renderNodeValue(node, theme) + theme.Muted.Render("  "+row.Path)
+	line := label + renderNodeValue(node, theme)
+	if settings.ShowJSONPath {
+		line += theme.Muted.Render("  " + row.Path)
+	}
 	if width > 0 {
 		line = trimWidth(line, width)
 	}
@@ -135,8 +139,33 @@ func renderRowLabel(row session.Row, theme Theme) string {
 	return label
 }
 
-func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int, label, value string) []string {
+func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int, label, value string, showJSONPath bool) []string {
 	valueText := fmt.Sprintf("%q", value)
+	if !showJSONPath {
+		if width <= 0 {
+			line := label + theme.String.Render(valueText)
+			return []string{m.decorateRowLine(row, theme, line)}
+		}
+
+		labelWidth := lipgloss.Width(label)
+		wrapWidth := width - labelWidth
+		if wrapWidth < 1 {
+			wrapWidth = 1
+		}
+		parts := wrapText(valueText, wrapWidth)
+		continuationPrefix := strings.Repeat(" ", labelWidth)
+		lines := make([]string, 0, len(parts))
+		for index, part := range parts {
+			prefix := label
+			if index > 0 {
+				prefix = continuationPrefix
+			}
+			line := prefix + theme.String.Render(part)
+			lines = append(lines, m.decorateRowLine(row, theme, trimWidth(line, width)))
+		}
+		return lines
+	}
+
 	if width <= 0 {
 		line := label + theme.String.Render(valueText) + theme.Muted.Render("  "+row.Path)
 		return []string{m.decorateRowLine(row, theme, line)}
@@ -207,6 +236,21 @@ func renderNodeValue(node *document.Node, theme Theme) string {
 	}
 }
 
+func (m *Model) renderedStatusMessage(theme Theme) string {
+	message := m.Session.Status
+	style := theme.Status
+	if m.Session.Error != "" {
+		message = m.Session.Error
+		style = theme.Error
+	} else if message == "" && m.StartupWarning != "" {
+		message = m.StartupWarning
+	}
+	if message == "" {
+		return ""
+	}
+	return style.Render(message)
+}
+
 func (m *Model) renderFooter(theme Theme) string {
 	sourceLabel := string(m.Session.SourceKind)
 	if m.Session.SourceKind == source.KindFile && m.Session.SourcePath != "" {
@@ -217,18 +261,10 @@ func (m *Model) renderFooter(theme Theme) string {
 	if m.Session.Dirty {
 		dirty = " dirty"
 	}
-	message := m.Session.Status
-	style := theme.Status
-	if m.Session.Error != "" {
-		message = m.Session.Error
-		style = theme.Error
-	} else if message == "" && m.StartupWarning != "" {
-		message = m.StartupWarning
-	}
 	left := fmt.Sprintf("[%s%s] %s", mode, dirty, sourceLabel)
 	rightParts := make([]string, 0, 2)
-	if message != "" {
-		rightParts = append(rightParts, style.Render(message))
+	if message := m.renderedStatusMessage(theme); message != "" {
+		rightParts = append(rightParts, message)
 	}
 	if hint := m.footerHint(theme); hint != "" {
 		rightParts = append(rightParts, hint)

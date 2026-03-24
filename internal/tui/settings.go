@@ -13,6 +13,7 @@ import (
 
 const (
 	settingsRowTheme = iota
+	settingsRowShowJSONPath
 	settingsRowWrapLongStrings
 	settingsRowSaveIndent
 	settingsRowCount
@@ -139,6 +140,8 @@ func (m *Model) activateSettingsRow() {
 	switch m.settingsRow {
 	case settingsRowTheme:
 		m.previewSettingsTheme(1)
+	case settingsRowShowJSONPath:
+		m.toggleShowJSONPath()
 	case settingsRowWrapLongStrings:
 		m.toggleWrapLongStrings()
 	case settingsRowSaveIndent:
@@ -150,6 +153,8 @@ func (m *Model) adjustSettingsRow(step int) {
 	switch m.settingsRow {
 	case settingsRowTheme:
 		m.previewSettingsTheme(step)
+	case settingsRowShowJSONPath:
+		m.toggleShowJSONPath()
 	case settingsRowWrapLongStrings:
 		m.toggleWrapLongStrings()
 	case settingsRowSaveIndent:
@@ -166,6 +171,17 @@ func (m *Model) toggleWrapLongStrings() {
 		state = "on"
 	}
 	m.Session.SetStatus(fmt.Sprintf("previewing long string wrapping %s; press s to save", state))
+}
+
+func (m *Model) toggleShowJSONPath() {
+	settings := m.ActiveSettings.WithDefaults()
+	settings.ShowJSONPath = !settings.ShowJSONPath
+	m.ActiveSettings = settings
+	state := "off"
+	if settings.ShowJSONPath {
+		state = "on"
+	}
+	m.Session.SetStatus(fmt.Sprintf("previewing JSON path display %s; press s to save", state))
 }
 
 func (m *Model) cycleSaveIndent(step int) {
@@ -233,6 +249,7 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 		m.renderSettingsRow(theme, settingsRowTheme, "Theme", theme.Selected.Render(" "+currentTheme+" "), theme.Muted.Render(position)),
 	}
 	rows = append(rows,
+		m.renderSettingsRow(theme, settingsRowShowJSONPath, "JSON path", theme.Selected.Render(" "+settingsBoolLabel(currentSettings.ShowJSONPath)+" "), ""),
 		m.renderSettingsRow(theme, settingsRowWrapLongStrings, "Long strings", theme.Selected.Render(" "+settingsBoolLabel(currentSettings.WrapLongStrings)+" "), ""),
 		m.renderSettingsRow(theme, settingsRowSaveIndent, "Save indent", theme.Selected.Render(" "+currentSettings.SaveIndent.Label()+" "), ""),
 	)
@@ -245,8 +262,10 @@ func (m *Model) settingsDialogView(theme Theme, width int) string {
 	lines = append(lines, rows[1:]...)
 	lines = append(lines,
 		theme.Muted.Render(savedLabel),
-		theme.Muted.Render("Saved long strings: "+settingsBoolLabel(savedSettings.WrapLongStrings)+"  Saved indent: "+savedSettings.SaveIndent.Label()),
+		theme.Muted.Render("Saved JSON path: "+settingsBoolLabel(savedSettings.ShowJSONPath)+"  Saved long strings: "+settingsBoolLabel(savedSettings.WrapLongStrings)),
+		theme.Muted.Render("Saved indent: "+savedSettings.SaveIndent.Label()),
 		stateLabel,
+		m.renderedStatusMessage(theme),
 		theme.Help.Render(m.settingsDialogHint()),
 		saveHint,
 		theme.Muted.Render("Built-ins + config themes/*.json appear here."),

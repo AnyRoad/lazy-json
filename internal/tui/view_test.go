@@ -238,3 +238,30 @@ func TestRenderRowLinesWrapLongStrings(t *testing.T) {
 		t.Fatalf("wrapped lines = %q, want split string fragments", joined)
 	}
 }
+
+func TestRenderRowLinesHideJSONPath(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"abcdefghijklmnopqrstuvwxyz"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Settings: config.DefaultSettings().WithShowJSONPath(false),
+	})
+	row := m.Session.Rows[1]
+	theme := m.theme()
+
+	lines := m.renderRowLines(row, theme, 20)
+	for _, line := range lines {
+		if strings.Contains(stripANSI(line), "$.name") {
+			t.Fatalf("line = %q, want JSON path hidden", stripANSI(line))
+		}
+	}
+
+	m.ActiveSettings.WrapLongStrings = true
+	lines = m.renderRowLines(row, theme, 20)
+	for _, line := range lines {
+		if strings.Contains(stripANSI(line), "$.name") {
+			t.Fatalf("wrapped line = %q, want JSON path hidden", stripANSI(line))
+		}
+	}
+}

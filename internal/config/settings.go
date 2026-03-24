@@ -39,7 +39,10 @@ type SaveIndent struct {
 type Settings struct {
 	Theme           string     `json:"theme"`
 	WrapLongStrings bool       `json:"wrap_long_strings"`
+	ShowJSONPath    bool       `json:"show_json_path"`
 	SaveIndent      SaveIndent `json:"save_indent"`
+
+	showJSONPathSet bool
 }
 
 func PathsFromUserConfigDir(userConfigDir string) Paths {
@@ -101,7 +104,9 @@ func DefaultSettings() Settings {
 	return Settings{
 		Theme:           DefaultThemeName,
 		WrapLongStrings: false,
+		ShowJSONPath:    true,
 		SaveIndent:      DefaultSaveIndent(),
+		showJSONPathSet: true,
 	}
 }
 
@@ -111,7 +116,44 @@ func (s Settings) WithDefaults() Settings {
 		s.Theme = DefaultThemeName
 	}
 	s.SaveIndent = s.SaveIndent.WithDefaults()
+	if !s.showJSONPathSet {
+		s.ShowJSONPath = true
+	}
+	s.showJSONPathSet = true
 	return s
+}
+
+func (s Settings) WithShowJSONPath(value bool) Settings {
+	s.ShowJSONPath = value
+	s.showJSONPathSet = true
+	return s
+}
+
+func (s *Settings) UnmarshalJSON(data []byte) error {
+	type rawSettings struct {
+		Theme           string     `json:"theme"`
+		WrapLongStrings bool       `json:"wrap_long_strings"`
+		ShowJSONPath    *bool      `json:"show_json_path"`
+		SaveIndent      SaveIndent `json:"save_indent"`
+	}
+
+	var raw rawSettings
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	s.Theme = raw.Theme
+	s.WrapLongStrings = raw.WrapLongStrings
+	s.SaveIndent = raw.SaveIndent
+	if raw.ShowJSONPath != nil {
+		s.ShowJSONPath = *raw.ShowJSONPath
+		s.showJSONPathSet = true
+	} else {
+		s.ShowJSONPath = false
+		s.showJSONPathSet = false
+	}
+
+	return nil
 }
 
 func LoadSettings(path string) (Settings, []string) {
