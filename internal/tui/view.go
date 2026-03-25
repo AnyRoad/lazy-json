@@ -7,10 +7,16 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/session"
 	"github.com/anyroad/lazy-json/internal/source"
 )
+
+type documentRenderOptions struct {
+	settings        config.Settings
+	lineNumberWidth int
+}
 
 func (m *Model) theme() Theme {
 	return m.ThemeRegistry.ThemeByName(m.Session.ThemeName)
@@ -46,12 +52,13 @@ func (m *Model) viewportSize() (int, int) {
 }
 
 func (m *Model) documentView(theme Theme, width, height int) string {
+	opts := m.documentRenderOptions()
 	reservedRows := m.documentReservedRows()
 	bodyHeight := height - reservedRows
 	if bodyHeight < 1 {
 		bodyHeight = 1
 	}
-	lines := m.visibleDocumentLines(theme, width, bodyHeight)
+	lines := m.visibleDocumentLines(theme, width, bodyHeight, opts)
 	if height > reservedRows {
 		lines = padLinesToHeight(lines, bodyHeight)
 	}
@@ -69,9 +76,12 @@ func (m *Model) documentReservedRows() int {
 	return 1
 }
 
-func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int) []string {
+func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int, opts documentRenderOptions) []string {
 	if len(m.Session.Rows) == 0 {
 		return nil
+	}
+	if !opts.settings.WrapLongStrings {
+		return m.visibleSingleLineRows(theme, width, bodyHeight, opts)
 	}
 
 	rowLines := make([][]string, 0, len(m.Session.Rows))
@@ -80,7 +90,7 @@ func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int) []strin
 	currentIndex, hasCurrent := m.Session.RowKeyIndex[m.Session.SelectedRow()]
 
 	for index, row := range m.Session.Rows {
-		rendered := m.renderRowLines(row, theme, width)
+		rendered := m.renderRowLinesWithOptions(row, theme, width, opts)
 		if len(rendered) == 0 {
 			rendered = []string{""}
 		}
@@ -110,8 +120,38 @@ func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int) []strin
 	return sliceVisibleLines(rowLines, top, top+bodyHeight)
 }
 
+func (m *Model) visibleSingleLineRows(theme Theme, width, bodyHeight int, opts documentRenderOptions) []string {
+	rows := m.Session.Rows
+	currentIndex, hasCurrent := m.Session.RowKeyIndex[m.Session.SelectedRow()]
+	start := 0
+	if hasCurrent && len(rows) > bodyHeight {
+		start = currentIndex - bodyHeight/2
+		if start < 0 {
+			start = 0
+		}
+		maxStart := len(rows) - bodyHeight
+		if maxStart < 0 {
+			maxStart = 0
+		}
+		if start > maxStart {
+			start = maxStart
+		}
+	}
+
+	end := start + bodyHeight
+	if end > len(rows) {
+		end = len(rows)
+	}
+
+	lines := make([]string, 0, end-start)
+	for _, row := range rows[start:end] {
+		lines = append(lines, m.renderSingleRowLine(row, theme, width, opts))
+	}
+	return lines
+}
+
 func (m *Model) renderRow(row session.Row, theme Theme) string {
-	lines := m.renderRowLines(row, theme, 0)
+	lines := m.renderRowLinesWithOptions(row, theme, 0, m.documentRenderOptions())
 	if len(lines) == 0 {
 		return ""
 	}
@@ -119,33 +159,26 @@ func (m *Model) renderRow(row session.Row, theme Theme) string {
 }
 
 func (m *Model) renderRowLines(row session.Row, theme Theme, width int) []string {
-	label := m.renderRowLabel(row, theme)
-	if row.IsBatch() {
-		line := label
-		if width > 0 {
-			line = trimWidth(line, width)
-		}
-		return []string{m.decorateRowLine(row, theme, line)}
-	}
+	return m.renderRowLinesWithOptions(row, theme, width, m.documentRenderOptions())
+}
 
-	loc, _ := m.Doc.Find(row.NodeID)
-	node := loc.Node
-	settings := m.ActiveSettings.WithDefaults()
-	if settings.WrapLongStrings && node.Kind == document.KindString {
-		return m.renderWrappedStringLines(row, theme, width, label, node.String, settings.ShowJSONPath)
+func (m *Model) renderRowLinesWithOptions(row session.Row, theme Theme, width int, opts documentRenderOptions) []string {
+	label := m.renderRowLabelWithWidth(row, theme, opts.lineNumberWidth)
+	if row.IsBatch() {
+		return []string{m.renderSingleRowLineWithLabel(row, theme, width, label, opts.settings.ShowJSONPath)}
 	}
-	line := label + renderNodeValue(node, theme)
-	if settings.ShowJSONPath {
-		line += theme.Muted.Render("  " + row.Path)
+	if opts.settings.WrapLongStrings && row.Kind == document.KindString {
+		return m.renderWrappedStringLines(row, theme, width, label, opts.settings.ShowJSONPath, opts.lineNumberWidth)
 	}
-	if width > 0 {
-		line = trimWidth(line, width)
-	}
-	return []string{m.decorateRowLine(row, theme, line)}
+	return []string{m.renderSingleRowLineWithLabel(row, theme, width, label, opts.settings.ShowJSONPath)}
 }
 
 func (m *Model) renderRowLabel(row session.Row, theme Theme) string {
-	label := m.renderLineNumberPrefix(row, theme)
+	return m.renderRowLabelWithWidth(row, theme, m.lineNumberWidth())
+}
+
+func (m *Model) renderRowLabelWithWidth(row session.Row, theme Theme, lineNumberWidth int) string {
+	label := m.renderLineNumberPrefixWithWidth(row, theme, lineNumberWidth)
 	indent := strings.Repeat("  ", row.Depth)
 	marker := " "
 	if row.IsContainer {
@@ -168,16 +201,46 @@ func (m *Model) renderRowLabel(row session.Row, theme Theme) string {
 	return label
 }
 
-func (m *Model) lineNumberWidth() int {
-	settings := m.ActiveSettings.WithDefaults()
-	if !settings.ShowLineNumbers || m.Session == nil || len(m.Session.Rows) == 0 {
-		return 0
+func (m *Model) renderSingleRowLine(row session.Row, theme Theme, width int, opts documentRenderOptions) string {
+	label := m.renderRowLabelWithWidth(row, theme, opts.lineNumberWidth)
+	return m.renderSingleRowLineWithLabel(row, theme, width, label, opts.settings.ShowJSONPath)
+}
+
+func (m *Model) renderSingleRowLineWithLabel(row session.Row, theme Theme, width int, label string, showJSONPath bool) string {
+	line := label
+	if !row.IsBatch() {
+		line += renderNodeValue(row, theme)
+		if showJSONPath {
+			line += theme.Muted.Render("  " + row.Path)
+		}
 	}
-	return len(strconv.Itoa(m.Session.Rows[len(m.Session.Rows)-1].LineNumber))
+	if width > 0 {
+		line = trimWidth(line, width)
+	}
+	return m.decorateRowLine(row, theme, line)
+}
+
+func (m *Model) documentRenderOptions() documentRenderOptions {
+	settings := m.ActiveSettings.WithDefaults()
+	lineNumberWidth := 0
+	if settings.ShowLineNumbers && m.Session != nil && len(m.Session.Rows) > 0 {
+		lineNumberWidth = len(strconv.Itoa(m.Session.Rows[len(m.Session.Rows)-1].LineNumber))
+	}
+	return documentRenderOptions{
+		settings:        settings,
+		lineNumberWidth: lineNumberWidth,
+	}
+}
+
+func (m *Model) lineNumberWidth() int {
+	return m.documentRenderOptions().lineNumberWidth
 }
 
 func (m *Model) renderLineNumberPrefix(row session.Row, theme Theme) string {
-	width := m.lineNumberWidth()
+	return m.renderLineNumberPrefixWithWidth(row, theme, m.lineNumberWidth())
+}
+
+func (m *Model) renderLineNumberPrefixWithWidth(row session.Row, theme Theme, width int) string {
 	if width == 0 {
 		return ""
 	}
@@ -185,15 +248,18 @@ func (m *Model) renderLineNumberPrefix(row session.Row, theme Theme) string {
 }
 
 func (m *Model) lineNumberBlankPrefix() string {
-	width := m.lineNumberWidth()
+	return m.lineNumberBlankPrefixWithWidth(m.lineNumberWidth())
+}
+
+func (m *Model) lineNumberBlankPrefixWithWidth(width int) string {
 	if width == 0 {
 		return ""
 	}
 	return strings.Repeat(" ", width+1)
 }
 
-func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int, label, value string, showJSONPath bool) []string {
-	valueText := fmt.Sprintf("%q", value)
+func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int, label string, showJSONPath bool, lineNumberWidth int) []string {
+	valueText := fmt.Sprintf("%q", row.StringValue)
 	if !showJSONPath {
 		if width <= 0 {
 			line := label + theme.String.Render(valueText)
@@ -253,7 +319,7 @@ func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int
 		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(line, width)))
 	}
 	if pathWidth >= wrapWidth {
-		pathPrefix := m.lineNumberBlankPrefix() + strings.Repeat("  ", row.Depth) + "  "
+		pathPrefix := m.lineNumberBlankPrefixWithWidth(lineNumberWidth) + strings.Repeat("  ", row.Depth) + "  "
 		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(pathPrefix+theme.Muted.Render(row.Path), width)))
 	}
 	return lines
@@ -269,16 +335,16 @@ func (m *Model) decorateRowLine(row session.Row, theme Theme, line string) strin
 	return line
 }
 
-func renderNodeValue(node *document.Node, theme Theme) string {
-	switch node.Kind {
+func renderNodeValue(row session.Row, theme Theme) string {
+	switch row.Kind {
 	case document.KindObject, document.KindArray:
-		return theme.Muted.Render(node.Summary())
+		return theme.Muted.Render(row.Summary)
 	case document.KindString:
-		return theme.String.Render(fmt.Sprintf("%q", node.String))
+		return theme.String.Render(fmt.Sprintf("%q", row.StringValue))
 	case document.KindNumber:
-		return theme.Number.Render(node.Number)
+		return theme.Number.Render(row.Summary)
 	case document.KindBool:
-		if node.Boolean {
+		if row.Summary == "true" {
 			return theme.Bool.Render("true")
 		}
 		return theme.Bool.Render("false")

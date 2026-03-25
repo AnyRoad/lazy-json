@@ -348,6 +348,39 @@ func TestSearchHits(t *testing.T) {
 	}
 }
 
+func TestSearchHitLookupSetBuildsAndClears(t *testing.T) {
+	doc := testDoc(t)
+	s := New(doc, source.Input{Kind: source.KindFile}, "")
+	targetID := doc.Root.Object[1].Value.Array[0].Object[0].Value.ID
+
+	s.Search.Query = "alpha"
+	s.UpdateSearchHits(doc)
+	if !s.HasSearchHit(targetID) {
+		t.Fatalf("HasSearchHit(%d) = false, want true", targetID)
+	}
+	if got := len(s.SearchHitSet); got == 0 {
+		t.Fatal("SearchHitSet is empty, want populated lookup")
+	}
+
+	s.Search.Query = "missing"
+	s.UpdateSearchHits(doc)
+	if got := len(s.SearchHits); got != 0 {
+		t.Fatalf("SearchHits = %d, want 0 after missing query", got)
+	}
+	if got := len(s.SearchHitSet); got != 0 {
+		t.Fatalf("SearchHitSet size = %d, want 0 after missing query", got)
+	}
+	if s.HasSearchHit(targetID) {
+		t.Fatalf("HasSearchHit(%d) = true, want false after clearing query results", targetID)
+	}
+
+	s.Search.Query = ""
+	s.UpdateSearchHits(doc)
+	if got := len(s.SearchHitSet); got != 0 {
+		t.Fatalf("SearchHitSet size = %d, want 0 after empty query", got)
+	}
+}
+
 func TestExpandAllAndCollapseAll(t *testing.T) {
 	doc := testDoc(t)
 	s := New(doc, source.Input{Kind: source.KindFile}, "")

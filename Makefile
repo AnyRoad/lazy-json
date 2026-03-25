@@ -2,8 +2,14 @@ APP_NAME := lazy-json
 CMD_PATH := ./cmd/$(APP_NAME)
 DIST_DIR := dist
 GO_FILES := $(shell find cmd internal -name '*.go' -type f)
+GO_TEST_ENV := GOCACHE=$(CURDIR)/.gocache
+PERF_PACKAGES := ./internal/session ./internal/tui
+PERF_BENCH_ARGS := -run '^$$' -bench . -benchmem -count=1
+PERF_BASELINE ?= .perf/perf.baseline.txt
+PERF_CURRENT ?= .perf/perf.current.txt
+PERF_CMD = $(GO_TEST_ENV) go test $(PERF_PACKAGES) $(PERF_BENCH_ARGS)
 
-.PHONY: fmt fmt-check vet test build build-all clean check
+.PHONY: fmt fmt-check vet test perf perf-save perf-compare build build-all clean check
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -16,6 +22,16 @@ vet:
 
 test:
 	go test ./...
+
+perf:
+	$(PERF_CMD)
+
+perf-save:
+	mkdir -p $(dir $(PERF_BASELINE))
+	$(PERF_CMD) | tee $(PERF_BASELINE)
+
+perf-compare:
+	sh scripts/perf-compare.sh "$(PERF_BASELINE)" "$(PERF_CURRENT)"
 
 build:
 	mkdir -p $(DIST_DIR)

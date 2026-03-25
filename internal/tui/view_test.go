@@ -7,6 +7,7 @@ import (
 
 	"github.com/anyroad/lazy-json/internal/config"
 	"github.com/anyroad/lazy-json/internal/document"
+	"github.com/anyroad/lazy-json/internal/session"
 	"github.com/anyroad/lazy-json/internal/source"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -134,6 +135,28 @@ func TestViewPadsToViewportHeightAndAnchorsFooter(t *testing.T) {
 	}
 	if got := lines[len(lines)-1]; !strings.Contains(got, "sample.json") {
 		t.Fatalf("last line = %q, want footer on final row", got)
+	}
+}
+
+func TestViewKeepsSelectedSingleLineRowVisible(t *testing.T) {
+	doc := testLongArrayDoc(t, 150)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+	m.Session.Expanded[items.ID] = true
+	m.Session.ExpandedBatches[session.BatchRowID(items.ID, 0)] = true
+	m.Session.SelectNode(items.Array[75].ID)
+	m.Session.Refresh(doc)
+	m.Width = 120
+	m.Height = 6
+
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "[75]: 75") {
+		t.Fatalf("View() = %q, want selected row visible in single-line viewport", view)
+	}
+	if !strings.Contains(view, "sample.json") {
+		t.Fatalf("View() = %q, want footer preserved", view)
 	}
 }
 

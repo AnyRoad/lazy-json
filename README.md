@@ -235,6 +235,9 @@ Pretty JSON output follows the current `Save indent` setting from the settings d
 - `make fmt-check`: fail if formatting is not clean
 - `make vet`: run `go vet ./...`
 - `make test`: run `go test ./...`
+- `make perf`: run the session/TUI benchmark suite with `-benchmem`
+- `make perf-save`: save the current benchmark baseline to `.perf/perf.baseline.txt`
+- `make perf-compare`: compare current benchmark output against the saved baseline, using `benchstat` when available
 - `make build`: build `dist/lazy-json` for the current platform
 - `make build-all`: cross-compile release binaries for the supported target set
 - `make check`: run format check, vet, and tests
@@ -247,6 +250,26 @@ Recommended local check before pushing:
 ```bash
 make check
 make build
+```
+
+Benchmark workflow:
+
+```bash
+make perf-save
+make perf-compare
+```
+
+The benchmarks default to:
+
+- `~/PROJECTS/react-json-view-lite-benchmark/src/hugeArray.json`
+- `~/PROJECTS/react-json-view-lite-benchmark/src/hugeJson.json`
+
+Override them when needed:
+
+```bash
+LAZY_JSON_BENCH_HUGE_ARRAY=/path/to/hugeArray.json \
+LAZY_JSON_BENCH_HUGE_JSON=/path/to/hugeJson.json \
+make perf
 ```
 
 If you need writable Go cache directories in a restricted environment:

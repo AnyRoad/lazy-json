@@ -36,6 +36,7 @@ type Session struct {
 	Help            bool
 	Search          SearchState
 	SearchHits      []document.NodeID
+	SearchHitSet    map[document.NodeID]struct{}
 	Status          string
 	Error           string
 }

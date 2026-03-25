@@ -65,6 +65,7 @@ type Row struct {
 	IsContainer bool
 	Expanded    bool
 	Summary     string
+	StringValue string
 	BatchEnd    int
 }
 
@@ -107,6 +108,11 @@ func buildRows(
 	lineNumber *int,
 	rows *[]Row,
 ) {
+	if !visible {
+		countHiddenRows(node, lineNumber)
+		return
+	}
+
 	path := "$"
 	if parentID != 0 {
 		path = appendRowPath(parentPath, key, arrayIndex)
@@ -127,12 +133,11 @@ func buildRows(
 		IsContainer: node.IsContainer(),
 		Expanded:    expanded[node.ID],
 		Summary:     node.Summary(),
+		StringValue: node.String,
 	}
-	if visible {
-		*rows = append(*rows, row)
-	}
+	*rows = append(*rows, row)
 
-	childVisible := visible && row.IsContainer && row.Expanded
+	childVisible := row.IsContainer && row.Expanded
 	switch node.Kind {
 	case document.KindObject:
 		for _, entry := range node.Object {
@@ -145,6 +150,41 @@ func buildRows(
 		}
 		for idx, child := range node.Array {
 			buildRows(child, depth+1, "", idx, node.ID, row.ID, path, expanded, expandedBatches, childVisible, lineNumber, rows)
+		}
+	}
+}
+
+func countHiddenRows(node *document.Node, lineNumber *int) {
+	if node == nil {
+		return
+	}
+
+	*lineNumber++
+	switch node.Kind {
+	case document.KindObject:
+		for _, entry := range node.Object {
+			countHiddenRows(entry.Value, lineNumber)
+		}
+	case document.KindArray:
+		if shouldBatchArray(node) {
+			countHiddenBatchRows(node, lineNumber)
+			return
+		}
+		for _, child := range node.Array {
+			countHiddenRows(child, lineNumber)
+		}
+	}
+}
+
+func countHiddenBatchRows(node *document.Node, lineNumber *int) {
+	for start := 0; start < len(node.Array); start += longArrayBatchSize {
+		end := start + longArrayBatchSize
+		if end > len(node.Array) {
+			end = len(node.Array)
+		}
+		*lineNumber++
+		for _, child := range node.Array[start:end] {
+			countHiddenRows(child, lineNumber)
 		}
 	}
 }
