@@ -54,10 +54,7 @@ func (m *Model) viewportSize() (int, int) {
 func (m *Model) documentView(theme Theme, width, height int) string {
 	opts := m.documentRenderOptions()
 	reservedRows := m.documentReservedRows()
-	bodyHeight := height - reservedRows
-	if bodyHeight < 1 {
-		bodyHeight = 1
-	}
+	bodyHeight := m.documentBodyHeightForHeight(height)
 	lines := m.visibleDocumentLines(theme, width, bodyHeight, opts)
 	if height > reservedRows {
 		lines = padLinesToHeight(lines, bodyHeight)
@@ -74,6 +71,19 @@ func (m *Model) documentReservedRows() int {
 		return 2
 	}
 	return 1
+}
+
+func (m *Model) documentBodyHeight() int {
+	_, height := m.viewportSize()
+	return m.documentBodyHeightForHeight(height)
+}
+
+func (m *Model) documentBodyHeightForHeight(height int) int {
+	bodyHeight := height - m.documentReservedRows()
+	if bodyHeight < 1 {
+		return 1
+	}
+	return bodyHeight
 }
 
 func (m *Model) visibleDocumentLines(theme Theme, width, bodyHeight int, opts documentRenderOptions) []string {

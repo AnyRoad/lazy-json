@@ -3,6 +3,8 @@ package tui
 const helpText = `Navigation
   j/k       move
   h/l       collapse/expand or parent/child
+  ctrl+b/f  page up / down
+  pgup/down page up / down
   gg / G    top / bottom
   ]p        next parent sibling
   zR / zM   expand all / collapse all

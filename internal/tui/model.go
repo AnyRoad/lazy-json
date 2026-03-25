@@ -275,6 +275,10 @@ func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
 		m.Session.Move(1)
 	case "k", "up":
 		m.Session.Move(-1)
+	case "ctrl+f", "pgdown":
+		m.movePage(1)
+	case "ctrl+b", "pgup":
+		m.movePage(-1)
 	case "h", "left":
 		m.Session.CollapseSelected(m.Doc)
 		m.refresh()
@@ -320,6 +324,18 @@ func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m *Model) movePage(direction int) {
+	if m.Session == nil || len(m.Session.Rows) == 0 || direction == 0 {
+		return
+	}
+
+	step := m.documentBodyHeight()
+	if step < 1 {
+		step = 1
+	}
+	m.Session.Move(direction * step)
 }
 
 func (m *Model) busy() bool {

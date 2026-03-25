@@ -73,6 +73,26 @@ func testLongObjectArrayDoc(t *testing.T, count int) *document.Document {
 	return doc
 }
 
+func testFlatObjectDoc(t *testing.T, count int) *document.Document {
+	t.Helper()
+
+	var raw strings.Builder
+	raw.WriteString("{")
+	for idx := 0; idx < count; idx++ {
+		if idx > 0 {
+			raw.WriteByte(',')
+		}
+		raw.WriteString(fmt.Sprintf(`"item_%d":%d`, idx, idx))
+	}
+	raw.WriteString("}")
+
+	doc, err := document.Parse([]byte(raw.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
 func selectFirstBatch(t *testing.T, m *Model, arrayID document.NodeID) {
 	t.Helper()
 
@@ -260,6 +280,33 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 	}
 	if got, want := m.Settings.Theme, lastBuiltinThemeName(t); got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+}
+
+func TestPageNavigationShortcuts(t *testing.T) {
+	doc := testFlatObjectDoc(t, 20)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{})
+	m.Width = 100
+	m.Height = 8
+
+	applyMsg(t, m, specialKey(tea.KeyCtrlF))
+	if got, want := m.Session.SelectedID, doc.Root.Object[6].Value.ID; got != want {
+		t.Fatalf("SelectedID after ctrl+f = %d, want %d", got, want)
+	}
+
+	applyMsg(t, m, specialKey(tea.KeyPgDown))
+	if got, want := m.Session.SelectedID, doc.Root.Object[13].Value.ID; got != want {
+		t.Fatalf("SelectedID after pgdown = %d, want %d", got, want)
+	}
+
+	applyMsg(t, m, specialKey(tea.KeyCtrlB))
+	if got, want := m.Session.SelectedID, doc.Root.Object[6].Value.ID; got != want {
+		t.Fatalf("SelectedID after ctrl+b = %d, want %d", got, want)
+	}
+
+	applyMsg(t, m, specialKey(tea.KeyPgUp))
+	if got, want := m.Session.SelectedID, doc.Root.ID; got != want {
+		t.Fatalf("SelectedID after pgup = %d, want %d", got, want)
 	}
 }
 

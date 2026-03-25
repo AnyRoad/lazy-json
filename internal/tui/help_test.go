@@ -23,6 +23,12 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, "]p        next parent sibling") {
 		t.Fatalf("helpView() = %q, want parent sibling shortcut", help)
 	}
+	if !strings.Contains(help, "ctrl+b/f  page up / down") {
+		t.Fatalf("helpView() = %q, want vim-style page shortcuts", help)
+	}
+	if !strings.Contains(help, "pgup/down page up / down") {
+		t.Fatalf("helpView() = %q, want terminal page shortcuts", help)
+	}
 	if !strings.Contains(help, "zR / zM   expand all / collapse all") {
 		t.Fatalf("helpView() = %q, want expand/collapse all shortcuts", help)
 	}
@@ -110,6 +116,7 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"cat data.json | lazy-json --select '$.items[0].name'",
 		"You can add `--select '$.path.to.node'` to either startup form to open with a specific node selected.",
 		"If the full path does not exist, `lazy-json` falls back to the nearest existing ancestor; if only `$` exists, it still opens and shows an error in the footer.",
+		"- `ctrl+b` / `ctrl+f` or `pgup` / `pgdown`: page up or down by the current viewport height",
 		"- `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found",
 		"- `zR` / `zM`: expand all containers / collapse all containers except the root",
 		"- `za`: expand the selected array, or nearest array ancestor, so each container element opens one level",
