@@ -119,7 +119,7 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"- `ctrl+b` / `ctrl+f` or `pgup` / `pgdown`: page up or down by the current viewport height",
 		"- `]p`: jump to the next parent sibling node, climbing ancestors until a next sibling is found",
 		"- `zR` / `zM`: expand all containers / collapse all containers except the root",
-		"- `za`: expand the selected array, or nearest array ancestor, so each container element opens one level",
+		"- `za`: expand the selected array, or nearest array ancestor, so each container element opens one level; for batched arrays this applies to the selected batch, or the first batch from the array row",
 		"- `zA`: collapse the selected array, or nearest array ancestor, so all element containers close",
 		"- `u`: undo the last document change",
 		"- `U` / `ctrl+r`: redo the last undone document change",

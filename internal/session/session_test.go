@@ -451,6 +451,81 @@ func TestExpandNearestArrayOneLevelUsesNearestArrayAncestor(t *testing.T) {
 	}
 }
 
+func TestExpandNearestArrayOneLevelDefaultsToFirstLongArrayBatch(t *testing.T) {
+	doc := testLongObjectArrayDoc(t, 150)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+	s.SelectedID = items.ID
+
+	if !s.ExpandNearestArrayOneLevel(doc) {
+		t.Fatal("ExpandNearestArrayOneLevel() = false, want true on long array")
+	}
+	s.Refresh(doc)
+
+	firstBatch := BatchRowID(items.ID, 0)
+	secondBatch := BatchRowID(items.ID, 100)
+	if !s.ExpandedBatches[firstBatch] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true", firstBatch)
+	}
+	if s.ExpandedBatches[secondBatch] {
+		t.Fatalf("ExpandedBatches[%v] = true, want false", secondBatch)
+	}
+	if !s.Expanded[items.Array[0].ID] {
+		t.Fatal("first array element container is not expanded")
+	}
+	if s.Expanded[items.Array[149].ID] {
+		t.Fatal("last array element container is expanded, want collapsed")
+	}
+
+	firstTitleID := items.Array[0].Object[0].Value.ID
+	lastTitleID := items.Array[149].Object[0].Value.ID
+	if _, ok := s.RowIndex[firstTitleID]; !ok {
+		t.Fatal("first nested title row is not visible after long-array expansion")
+	}
+	if _, ok := s.RowIndex[lastTitleID]; ok {
+		t.Fatal("last nested title row is visible, want hidden outside first batch")
+	}
+}
+
+func TestExpandNearestArrayOneLevelUsesCurrentLongArrayBatch(t *testing.T) {
+	doc := testLongObjectArrayDoc(t, 150)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+	s.Expanded[items.ID] = true
+	s.Refresh(doc)
+	s.SelectRowID(BatchRowID(items.ID, 100))
+	s.Refresh(doc)
+
+	if !s.ExpandNearestArrayOneLevel(doc) {
+		t.Fatal("ExpandNearestArrayOneLevel() = false, want true on selected batch")
+	}
+	s.Refresh(doc)
+
+	firstBatch := BatchRowID(items.ID, 0)
+	secondBatch := BatchRowID(items.ID, 100)
+	if s.ExpandedBatches[firstBatch] {
+		t.Fatalf("ExpandedBatches[%v] = true, want false", firstBatch)
+	}
+	if !s.ExpandedBatches[secondBatch] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true", secondBatch)
+	}
+	if s.Expanded[items.Array[0].ID] {
+		t.Fatal("first array element container is expanded, want collapsed")
+	}
+	if !s.Expanded[items.Array[149].ID] {
+		t.Fatal("last array element container is not expanded")
+	}
+
+	firstTitleID := items.Array[0].Object[0].Value.ID
+	lastTitleID := items.Array[149].Object[0].Value.ID
+	if _, ok := s.RowIndex[firstTitleID]; ok {
+		t.Fatal("first nested title row is visible, want hidden outside current batch")
+	}
+	if _, ok := s.RowIndex[lastTitleID]; !ok {
+		t.Fatal("last nested title row is not visible after current-batch expansion")
+	}
+}
+
 func TestCollapseNearestArrayElements(t *testing.T) {
 	doc := testDoc(t)
 	s := New(doc, source.Input{Kind: source.KindFile}, "")

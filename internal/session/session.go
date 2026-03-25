@@ -225,8 +225,25 @@ func (s *Session) ExpandNearestArrayOneLevel(doc *document.Document) bool {
 	if s.Expanded == nil {
 		s.Expanded = make(map[document.NodeID]bool)
 	}
+	if s.ExpandedBatches == nil {
+		s.ExpandedBatches = make(map[RowID]bool)
+	}
 	s.Expanded[target.ID] = true
-	for _, child := range target.Array {
+	children := target.Array
+	if shouldBatchArray(target) {
+		batchID, ok := s.currentBatchRowIDForArray(doc, target.ID)
+		if !ok {
+			batchID = BatchRowID(target.ID, 0)
+		}
+		s.ExpandedBatches[batchID] = true
+		start := batchID.BatchStart()
+		end := start + longArrayBatchSize
+		if end > len(children) {
+			end = len(children)
+		}
+		children = children[start:end]
+	}
+	for _, child := range children {
 		if child != nil && child.IsContainer() {
 			s.Expanded[child.ID] = true
 		}
@@ -523,6 +540,25 @@ func (s *Session) nearestArrayTarget(doc *document.Document) (*document.Node, bo
 		currentID = loc.Parent.ID
 	}
 	return nil, false
+}
+
+func (s *Session) currentBatchRowIDForArray(doc *document.Document, arrayID document.NodeID) (RowID, bool) {
+	row, ok := s.CurrentRow()
+	if !ok {
+		return RowID{}, false
+	}
+	if row.IsBatch() && row.NodeID == arrayID {
+		return row.ID, true
+	}
+	if row.NodeID == 0 || row.NodeID == arrayID {
+		return RowID{}, false
+	}
+	for _, batchID := range batchRowAncestors(doc, row.NodeID) {
+		if batchID.NodeID() == arrayID {
+			return batchID, true
+		}
+	}
+	return RowID{}, false
 }
 
 func (s *Session) deleteBatchExpansionsForArray(arrayID document.NodeID) {

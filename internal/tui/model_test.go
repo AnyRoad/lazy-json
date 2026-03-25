@@ -1211,6 +1211,70 @@ func TestExpandArrayElementsOneLevelRequiresArrayContext(t *testing.T) {
 	}
 }
 
+func TestExpandArrayElementsOneLevelDefaultsToFirstLongArrayBatch(t *testing.T) {
+	doc := testLongObjectArrayDoc(t, 150)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+	m.Session.SelectedID = items.ID
+
+	runCmd(t, m, m.expandArrayElementsOneLevel())
+
+	firstBatch := session.BatchRowID(items.ID, 0)
+	secondBatch := session.BatchRowID(items.ID, 100)
+	if !m.Session.ExpandedBatches[firstBatch] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true", firstBatch)
+	}
+	if m.Session.ExpandedBatches[secondBatch] {
+		t.Fatalf("ExpandedBatches[%v] = true, want false", secondBatch)
+	}
+
+	firstTitleID := items.Array[0].Object[0].Value.ID
+	lastTitleID := items.Array[149].Object[0].Value.ID
+	if _, ok := m.Session.RowIndex[firstTitleID]; !ok {
+		t.Fatal("first nested title row is not visible after za")
+	}
+	if _, ok := m.Session.RowIndex[lastTitleID]; ok {
+		t.Fatal("last nested title row is visible, want hidden outside first batch")
+	}
+	if got, want := m.Session.Status, "expanded array elements one level"; got != want {
+		t.Fatalf("Status = %q, want %q after za on long array", got, want)
+	}
+}
+
+func TestExpandArrayElementsOneLevelUsesSelectedLongArrayBatch(t *testing.T) {
+	doc := testLongObjectArrayDoc(t, 150)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+	m.Session.Expanded[items.ID] = true
+	m.refresh()
+	m.Session.SelectRowID(session.BatchRowID(items.ID, 100))
+	m.refresh()
+
+	runCmd(t, m, m.expandArrayElementsOneLevel())
+
+	firstBatch := session.BatchRowID(items.ID, 0)
+	secondBatch := session.BatchRowID(items.ID, 100)
+	if m.Session.ExpandedBatches[firstBatch] {
+		t.Fatalf("ExpandedBatches[%v] = true, want false", firstBatch)
+	}
+	if !m.Session.ExpandedBatches[secondBatch] {
+		t.Fatalf("ExpandedBatches[%v] = false, want true", secondBatch)
+	}
+
+	firstTitleID := items.Array[0].Object[0].Value.ID
+	lastTitleID := items.Array[149].Object[0].Value.ID
+	if _, ok := m.Session.RowIndex[firstTitleID]; ok {
+		t.Fatal("first nested title row is visible, want hidden outside selected batch")
+	}
+	if _, ok := m.Session.RowIndex[lastTitleID]; !ok {
+		t.Fatal("last nested title row is not visible after za on selected batch")
+	}
+}
+
 func TestCollapseArrayElementsRequiresArrayContext(t *testing.T) {
 	m := testModel(t)
 
