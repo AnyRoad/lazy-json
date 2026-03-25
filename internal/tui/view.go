@@ -330,6 +330,9 @@ func (m *Model) renderFooter(theme Theme) string {
 }
 
 func (m *Model) footerHint(theme Theme) string {
+	if m.busy() {
+		return theme.Status.Render("input blocked while jq runs")
+	}
 	if m.settingsOpen() {
 		return theme.Status.Render(m.settingsFooterHint())
 	}

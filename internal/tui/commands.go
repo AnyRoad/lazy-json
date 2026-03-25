@@ -9,18 +9,24 @@ import (
 
 	"github.com/anyroad/lazy-json/internal/document"
 	"github.com/anyroad/lazy-json/internal/integration"
+	"github.com/anyroad/lazy-json/internal/session"
 	"github.com/anyroad/lazy-json/internal/source"
 )
 
 type editorFinishedMsg struct {
-	Node *document.Node
-	Err  error
+	Node            *document.Node
+	TargetID        document.NodeID
+	Before          *document.Node
+	BeforeSelection session.RowID
+	Err             error
 }
 
 type jqFinishedMsg struct {
-	Node     *document.Node
-	TargetID document.NodeID
-	Err      error
+	Node            *document.Node
+	TargetID        document.NodeID
+	Before          *document.Node
+	BeforeSelection session.RowID
+	Err             error
 }
 
 func (m *Model) SelectPath(selectPath string) (document.PathResolution, error) {
@@ -67,6 +73,14 @@ func (m *Model) selectedNode() (*document.Node, error) {
 		return nil, err
 	}
 	return loc.Node, nil
+}
+
+func (m *Model) cloneNode(nodeID document.NodeID) (*document.Node, error) {
+	loc, ok := m.Doc.Find(nodeID)
+	if !ok {
+		return nil, fmt.Errorf("node %d not found", nodeID)
+	}
+	return document.CloneNode(loc.Node), nil
 }
 
 func (m *Model) currentContainerTarget() (*document.Node, error) {
@@ -138,17 +152,20 @@ func (m *Model) submitPrompt() tea.Cmd {
 			m.Session.SetError("key cannot be empty")
 			return nil
 		}
-		targetID, err := m.selectedNodeID()
+		selection := m.Session.SelectedRow()
+		loc, err := m.selectedLocation()
 		if err != nil {
 			m.Session.SetError(err.Error())
 			return nil
 		}
+		targetID := loc.Node.ID
+		oldKey := loc.Key
 		if err := m.Doc.RenameKey(targetID, value); err != nil {
 			m.Session.SetError(err.Error())
 			return nil
 		}
-		m.Session.Dirty = true
 		m.refresh()
+		m.pushHistory(newRenameHistoryEntry(targetID, oldKey, value, selection))
 		m.Session.SetStatus("renamed key")
 		return nil
 	case promptAddObject:
@@ -161,7 +178,13 @@ func (m *Model) submitPrompt() tea.Cmd {
 }
 
 func (m *Model) replaceSelected(input string, scalarOnly bool) tea.Cmd {
+	beforeSelection := m.Session.SelectedRow()
 	targetID, err := m.selectedNodeID()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
+	before, err := m.cloneNode(targetID)
 	if err != nil {
 		m.Session.SetError(err.Error())
 		return nil
@@ -179,13 +202,19 @@ func (m *Model) replaceSelected(input string, scalarOnly bool) tea.Cmd {
 		m.Session.SetError(err.Error())
 		return nil
 	}
-	m.Session.Dirty = true
+	after, err := m.cloneNode(targetID)
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
 	m.refresh()
+	m.pushHistory(newReplaceHistoryEntry(targetID, before, after, beforeSelection, m.Session.SelectedRow()))
 	m.Session.SetStatus("updated node")
 	return nil
 }
 
 func (m *Model) addObjectEntry(input string) tea.Cmd {
+	beforeSelection := m.Session.SelectedRow()
 	container, err := m.currentContainerTarget()
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -206,6 +235,7 @@ func (m *Model) addObjectEntry(input string) tea.Cmd {
 		m.Session.SetError("key cannot be empty")
 		return nil
 	}
+	index := len(container.Object)
 	node, err := document.ParseNode([]byte(raw))
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -215,15 +245,16 @@ func (m *Model) addObjectEntry(input string) tea.Cmd {
 		m.Session.SetError(err.Error())
 		return nil
 	}
-	m.Session.Dirty = true
 	m.Session.Expanded[container.ID] = true
 	m.Session.RevealNode(m.Doc, node.ID)
 	m.Session.UpdateSearchHits(m.Doc)
+	m.pushHistory(newObjectInsertHistoryEntry(container.ID, index, key, node, beforeSelection, m.Session.SelectedRow()))
 	m.Session.SetStatus("added object field")
 	return nil
 }
 
 func (m *Model) addArrayItem(input string) tea.Cmd {
+	beforeSelection := m.Session.SelectedRow()
 	container, err := m.currentContainerTarget()
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -233,6 +264,7 @@ func (m *Model) addArrayItem(input string) tea.Cmd {
 		m.Session.SetError("target is not an array")
 		return nil
 	}
+	index := len(container.Array)
 	node, err := document.ParseNode([]byte(input))
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -242,10 +274,10 @@ func (m *Model) addArrayItem(input string) tea.Cmd {
 		m.Session.SetError(err.Error())
 		return nil
 	}
-	m.Session.Dirty = true
 	m.Session.Expanded[container.ID] = true
 	m.Session.RevealNode(m.Doc, node.ID)
 	m.Session.UpdateSearchHits(m.Doc)
+	m.pushHistory(newArrayInsertHistoryEntry(container.ID, index, node, beforeSelection, m.Session.SelectedRow()))
 	m.Session.SetStatus("added array item")
 	return nil
 }
@@ -266,7 +298,7 @@ func (m *Model) save(path string) error {
 	}
 	m.Session.SourceKind = source.KindFile
 	m.Session.SourcePath = path
-	m.Session.Dirty = false
+	m.markSavedRevision()
 	return nil
 }
 
@@ -475,6 +507,10 @@ func (m *Model) handleCommand(command string) tea.Cmd {
 		return tea.Quit
 	case command == "q!":
 		return tea.Quit
+	case command == "undo":
+		return m.undoChange()
+	case command == "redo":
+		return m.redoChange()
 	case command == "theme":
 		m.cycleTheme()
 		return nil
@@ -534,18 +570,32 @@ func (m *Model) applyJQ(expr string, subtree bool) tea.Cmd {
 		m.Session.SetError("target node not found")
 		return nil
 	}
-	target := loc.Node
+	target := document.CloneNode(loc.Node)
+	before := document.CloneNode(target)
+	beforeSelection := m.Session.SelectedRow()
 	runner := m.JQRunner
 	if runner == nil {
 		runner = integration.ExecJQRunner{}
 	}
+	m.startBusy("running jq...")
 	return func() tea.Msg {
 		node, err := integration.ApplyJQ(runner, expr, target)
-		return jqFinishedMsg{Node: node, TargetID: targetID, Err: err}
+		return jqFinishedMsg{
+			Node:            node,
+			TargetID:        targetID,
+			Before:          before,
+			BeforeSelection: beforeSelection,
+			Err:             err,
+		}
 	}
 }
 
 func (m *Model) editExternal() tea.Cmd {
+	targetID, err := m.selectedNodeID()
+	if err != nil {
+		m.Session.SetError(err.Error())
+		return nil
+	}
 	node, err := m.selectedNode()
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -562,12 +612,20 @@ func (m *Model) editExternal() tea.Cmd {
 		m.Session.SetError(err.Error())
 		return nil
 	}
+	beforeSelection := m.Session.SelectedRow()
+	before := document.CloneNode(node)
 	return tea.ExecProcess(cmd, func(execErr error) tea.Msg {
 		defer os.Remove(path)
 		if execErr != nil {
-			return editorFinishedMsg{Err: execErr}
+			return editorFinishedMsg{TargetID: targetID, Err: execErr}
 		}
 		edited, err := integration.ReadEditedNode(path)
-		return editorFinishedMsg{Node: edited, Err: err}
+		return editorFinishedMsg{
+			Node:            edited,
+			TargetID:        targetID,
+			Before:          before,
+			BeforeSelection: beforeSelection,
+			Err:             err,
+		}
 	})
 }

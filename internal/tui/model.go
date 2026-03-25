@@ -40,6 +40,11 @@ type Model struct {
 	promptKind          promptKind
 	pendingPrefix       string
 	settingsRow         int
+	undoStack           []historyStateEntry
+	redoStack           []historyStateEntry
+	nextRevision        historyRevisionID
+	currentRevision     historyRevisionID
+	savedRevision       historyRevisionID
 	ExitOutput          []byte
 	JQRunner            integration.JQRunner
 	Clipboard           integration.Clipboard
@@ -126,6 +131,7 @@ func NewModel(doc *document.Document, src source.Input, options ModelOptions) *M
 		model.StartupWarning = message
 		model.Session.SetStatus(message)
 	}
+	model.syncDirty()
 	return model
 }
 
@@ -163,20 +169,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Session.SetError(msg.Err.Error())
 			return m, nil
 		}
-		targetID, err := m.selectedNodeID()
+		if err := m.Doc.Replace(msg.TargetID, msg.Node); err != nil {
+			m.Session.SetError(err.Error())
+			return m, nil
+		}
+		after, err := m.cloneNode(msg.TargetID)
 		if err != nil {
 			m.Session.SetError(err.Error())
 			return m, nil
 		}
-		if err := m.Doc.Replace(targetID, msg.Node); err != nil {
-			m.Session.SetError(err.Error())
-			return m, nil
-		}
-		m.Session.Dirty = true
+		m.Session.SelectNode(msg.TargetID)
 		m.refresh()
+		m.pushHistory(newReplaceHistoryEntry(msg.TargetID, msg.Before, after, msg.BeforeSelection, m.Session.SelectedRow()))
 		m.Session.SetStatus("updated node from external editor")
 		return m, nil
 	case jqFinishedMsg:
+		m.finishBusy()
 		if msg.Err != nil {
 			m.Session.SetError(msg.Err.Error())
 			return m, nil
@@ -185,12 +193,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Session.SetError(err.Error())
 			return m, nil
 		}
-		m.Session.Dirty = true
+		after, err := m.cloneNode(msg.TargetID)
+		if err != nil {
+			m.Session.SetError(err.Error())
+			return m, nil
+		}
 		m.Session.SelectNode(msg.TargetID)
 		m.refresh()
+		m.pushHistory(newReplaceHistoryEntry(msg.TargetID, msg.Before, after, msg.BeforeSelection, m.Session.SelectedRow()))
 		m.Session.SetStatus("applied jq transform")
 		return m, nil
 	case tea.KeyMsg:
+		if m.busy() {
+			return m.updateBusy(msg)
+		}
 		if m.Session.Help {
 			switch msg.String() {
 			case "?", "esc", "q":
@@ -222,6 +238,10 @@ func (m *Model) updatePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.prompt, cmd = m.prompt.Update(msg)
 	return m, cmd
+}
+
+func (m *Model) updateBusy(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	return m, nil
 }
 
 func (m *Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -277,6 +297,10 @@ func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
 		return m, m.startRename()
 	case "d":
 		return m, m.deleteSelected()
+	case "u":
+		return m, m.undoChange()
+	case "U", "ctrl+r":
+		return m, m.redoChange()
 	case "n":
 		m.Session.NextSearchHit(m.Doc, false)
 	case "N":
@@ -296,6 +320,26 @@ func (m *Model) handleNormalKey(key string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m *Model) busy() bool {
+	return m.Session != nil && m.Session.Mode == session.ModeBusy
+}
+
+func (m *Model) startBusy(status string) {
+	if m.Session == nil {
+		return
+	}
+	m.clearPendingPrefix()
+	m.Session.Mode = session.ModeBusy
+	m.Session.SetStatus(status)
+}
+
+func (m *Model) finishBusy() {
+	if m.Session == nil || m.Session.Mode != session.ModeBusy {
+		return
+	}
+	m.Session.Mode = session.ModeNormal
 }
 
 func (m *Model) resolvePendingPrefix(key string) (tea.Model, tea.Cmd) {
@@ -385,6 +429,7 @@ func (m *Model) startAdd() tea.Cmd {
 }
 
 func (m *Model) deleteSelected() tea.Cmd {
+	beforeSelection := m.Session.SelectedRow()
 	nodeID, err := m.selectedNodeID()
 	if err != nil {
 		m.Session.SetError(err.Error())
@@ -399,6 +444,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 		m.Session.SetError("cannot delete the root node")
 		return nil
 	}
+	deleted := document.CloneNode(loc.Node)
 	nextSelection := loc.Parent.ID
 	if loc.ParentKind == document.KindObject {
 		if len(loc.Parent.Object) > 1 {
@@ -422,9 +468,9 @@ func (m *Model) deleteSelected() tea.Cmd {
 		m.Session.SetError(err.Error())
 		return nil
 	}
-	m.Session.Dirty = true
 	m.Session.SelectNode(nextSelection)
 	m.refresh()
+	m.pushHistory(newDeleteHistoryEntry(loc.Parent.ID, loc.ParentKind, loc.Index, loc.Key, deleted, beforeSelection, m.Session.SelectedRow()))
 	m.Session.SetStatus("deleted node")
 	return nil
 }

@@ -30,6 +30,38 @@ type Node struct {
 	Boolean bool
 }
 
+func CloneNode(node *Node) *Node {
+	if node == nil {
+		return nil
+	}
+
+	cloned := &Node{
+		ID:      node.ID,
+		Kind:    node.Kind,
+		String:  node.String,
+		Number:  node.Number,
+		Boolean: node.Boolean,
+	}
+
+	switch node.Kind {
+	case KindObject:
+		cloned.Object = make([]ObjectEntry, len(node.Object))
+		for index, entry := range node.Object {
+			cloned.Object[index] = ObjectEntry{
+				Key:   entry.Key,
+				Value: CloneNode(entry.Value),
+			}
+		}
+	case KindArray:
+		cloned.Array = make([]*Node, len(node.Array))
+		for index, child := range node.Array {
+			cloned.Array[index] = CloneNode(child)
+		}
+	}
+
+	return cloned
+}
+
 type Document struct {
 	Root   *Node
 	nextID NodeID
@@ -75,6 +107,16 @@ func (d *Document) newID() NodeID {
 	id := d.nextID
 	d.nextID++
 	return id
+}
+
+func (d *Document) reserveIDs(node *Node) {
+	if node == nil {
+		return
+	}
+	max := d.maxID(node) + 1
+	if max > d.nextID {
+		d.nextID = max
+	}
 }
 
 func (n *Node) IsContainer() bool {

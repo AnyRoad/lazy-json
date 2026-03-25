@@ -32,6 +32,12 @@ func TestHelpView(t *testing.T) {
 	if !strings.Contains(help, "zA        collapse array elements") {
 		t.Fatalf("helpView() = %q, want array collapse shortcut", help)
 	}
+	if !strings.Contains(help, "u         undo") {
+		t.Fatalf("helpView() = %q, want undo shortcut", help)
+	}
+	if !strings.Contains(help, "U/ctrl+r  redo") {
+		t.Fatalf("helpView() = %q, want redo shortcuts", help)
+	}
 	if !strings.Contains(help, "yp        copy JSON path") {
 		t.Fatalf("helpView() = %q, want copy path shortcut", help)
 	}
@@ -40,6 +46,9 @@ func TestHelpView(t *testing.T) {
 	}
 	if !strings.Contains(help, ":theme    quick preview next theme") {
 		t.Fatalf("helpView() = %q, want quick preview command", help)
+	}
+	if !strings.Contains(help, ":undo / :redo") {
+		t.Fatalf("helpView() = %q, want undo/redo commands", help)
 	}
 	if !strings.Contains(help, ":copy-*   copy path/key/value/subtree/document") {
 		t.Fatalf("helpView() = %q, want copy command family", help)
@@ -105,11 +114,15 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"- `zR` / `zM`: expand all containers / collapse all containers except the root",
 		"- `za`: expand the selected array, or nearest array ancestor, so each container element opens one level",
 		"- `zA`: collapse the selected array, or nearest array ancestor, so all element containers close",
+		"- `u`: undo the last document change",
+		"- `U` / `ctrl+r`: redo the last undone document change",
 		"- `yp`: copy the selected JSON path",
 		"- `yk`: copy the selected object key",
 		"- `yv`: copy the selected value as compact JSON",
 		"- `ys`: copy the selected subtree as pretty JSON",
 		"- `yj`: copy the whole document as pretty JSON",
+		"- `:undo`: undo the last document change",
+		"- `:redo`: redo the last undone document change",
 		"- `:theme`: quick-preview the next theme without saving",
 		"- `:settings`: open the settings dialog",
 		"- `:select-path $.items[0].name`: select a node by JSON path",
@@ -117,6 +130,7 @@ func TestReadmeDocumentsThemeSettingsBindingsAndPaths(t *testing.T) {
 		"- `:copy-json`: copy the whole document as pretty JSON",
 		"- `:expand-all`: expand every object and array in the document",
 		"- `:next-parent-sibling`: jump to the next sibling of the selected node's parent, climbing ancestors as needed",
+		"Undo and redo track document changes only. Navigation, folds, search query changes, theme previews, and settings changes are not part of edit history.",
 		"- `s`: save the current settings to `settings.json`",
 		"`lazy-json` stores theme, line-number visibility, JSON-path visibility, wrapping, and save-indent settings under `os.UserConfigDir()/lazy-json/settings.json` and discovers external themes from `os.UserConfigDir()/lazy-json/themes/*.json`.",
 		"Theme, line-number visibility, JSON-path visibility, wrap, and save-indent changes are not persisted until you press `s` in the settings dialog, so the quick `t` / `:theme` shortcuts remain preview-only switches.",

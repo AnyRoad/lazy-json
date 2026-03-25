@@ -11,6 +11,8 @@ const helpText = `Navigation
   / n N     search
 
 Editing
+  u         undo
+  U/ctrl+r  redo
   e         edit scalar
   E         edit subtree in $EDITOR
   a         add object field / array item
@@ -44,6 +46,7 @@ Commands
   :x        save and quit
   :print    print pretty JSON and quit
   :q / :q!  quit / force quit
+  :undo / :redo
   :theme    quick preview next theme
   :settings open settings dialog
   :select-path P  select node by JSON path

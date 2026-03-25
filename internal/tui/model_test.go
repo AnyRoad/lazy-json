@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -141,6 +142,45 @@ func (c *stubClipboard) WriteAll(text string) error {
 	return nil
 }
 
+type blockingJQRunner struct {
+	started chan struct{}
+	release chan struct{}
+	stdout  []byte
+	stderr  []byte
+	err     error
+}
+
+func newBlockingJQRunner(stdout []byte, stderr []byte, err error) *blockingJQRunner {
+	return &blockingJQRunner{
+		started: make(chan struct{}, 1),
+		release: make(chan struct{}),
+		stdout:  stdout,
+		stderr:  stderr,
+		err:     err,
+	}
+}
+
+func (r *blockingJQRunner) Run(name string, args []string, stdin []byte) ([]byte, []byte, error) {
+	select {
+	case r.started <- struct{}{}:
+	default:
+	}
+	<-r.release
+	return r.stdout, r.stderr, r.err
+}
+
+func waitForChannelSignal[T any](t *testing.T, ch <-chan T, label string) T {
+	t.Helper()
+	select {
+	case value := <-ch:
+		return value
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for %s", label)
+	}
+	var zero T
+	return zero
+}
+
 func clipboardForModel(t *testing.T, m *Model) *stubClipboard {
 	t.Helper()
 	clipboard, ok := m.Clipboard.(*stubClipboard)
@@ -174,6 +214,26 @@ func runCmd(t *testing.T, m *Model, cmd tea.Cmd) {
 	}
 	*m = *model
 	runCmd(t, m, next)
+}
+
+func applyMsg(t *testing.T, m *Model, msg tea.Msg) {
+	t.Helper()
+	updated, cmd := m.Update(msg)
+	model, ok := updated.(*Model)
+	if !ok {
+		t.Fatalf("Update() returned %T", updated)
+	}
+	*m = *model
+	runCmd(t, m, cmd)
+}
+
+func mustParseNode(t *testing.T, raw string) *document.Node {
+	t.Helper()
+	node, err := document.ParseNode([]byte(raw))
+	if err != nil {
+		t.Fatalf("ParseNode(%q) error = %v", raw, err)
+	}
+	return node
 }
 
 func TestNavigationAndThemeSwitch(t *testing.T) {
@@ -334,6 +394,396 @@ func TestEditScalarPrompt(t *testing.T) {
 	if !m.Session.Dirty {
 		t.Fatal("Dirty = false, want true")
 	}
+}
+
+func TestUndoRedoScalarEditKeys(t *testing.T) {
+	m := testModel(t)
+	nameID := m.Doc.Root.Object[0].Value.ID
+	m.Session.SelectNode(nameID)
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Grace"`)
+	runCmd(t, m, m.submitPrompt())
+
+	if got, want := m.Doc.Root.Object[0].Value.String, "Grace"; got != want {
+		t.Fatalf("string after edit = %q, want %q", got, want)
+	}
+	if !m.Session.Dirty {
+		t.Fatal("Dirty = false after edit, want true")
+	}
+
+	applyMsg(t, m, key("u"))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Ada"; got != want {
+		t.Fatalf("string after undo = %q, want %q", got, want)
+	}
+	if got, want := m.Session.Status, "undid change"; got != want {
+		t.Fatalf("Status after undo = %q, want %q", got, want)
+	}
+	if m.Session.Dirty {
+		t.Fatal("Dirty = true after undo to initial state, want false")
+	}
+
+	applyMsg(t, m, specialKey(tea.KeyCtrlR))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Grace"; got != want {
+		t.Fatalf("string after ctrl+r = %q, want %q", got, want)
+	}
+	if got, want := m.Session.Status, "redid change"; got != want {
+		t.Fatalf("Status after ctrl+r = %q, want %q", got, want)
+	}
+
+	applyMsg(t, m, key("u"))
+	applyMsg(t, m, key("U"))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Grace"; got != want {
+		t.Fatalf("string after U = %q, want %q", got, want)
+	}
+	if got, want := m.Session.Status, "redid change"; got != want {
+		t.Fatalf("Status after U = %q, want %q", got, want)
+	}
+}
+
+func TestUndoRedoCommandsAndRedoClearing(t *testing.T) {
+	m := testModel(t)
+	nameID := m.Doc.Root.Object[0].Value.ID
+	m.Session.SelectNode(nameID)
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Grace"`)
+	runCmd(t, m, m.submitPrompt())
+
+	runCmd(t, m, m.handleCommand("undo"))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Ada"; got != want {
+		t.Fatalf("string after :undo = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Marie"`)
+	runCmd(t, m, m.submitPrompt())
+	if got, want := m.Doc.Root.Object[0].Value.String, "Marie"; got != want {
+		t.Fatalf("string after second edit = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.handleCommand("redo"))
+	if got, want := m.Session.Error, "nothing to redo"; got != want {
+		t.Fatalf("Error after :redo = %q, want %q", got, want)
+	}
+	if got, want := m.Doc.Root.Object[0].Value.String, "Marie"; got != want {
+		t.Fatalf("string after failed :redo = %q, want %q", got, want)
+	}
+}
+
+func TestUndoRedoTracksSavedRevision(t *testing.T) {
+	m := testModel(t)
+	nameID := m.Doc.Root.Object[0].Value.ID
+	m.Session.SelectNode(nameID)
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Grace"`)
+	runCmd(t, m, m.submitPrompt())
+
+	path := t.TempDir() + "/saved.json"
+	if err := m.save(path); err != nil {
+		t.Fatalf("save() error = %v", err)
+	}
+	if m.Session.Dirty {
+		t.Fatal("Dirty = true after save, want false")
+	}
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Marie"`)
+	runCmd(t, m, m.submitPrompt())
+	if !m.Session.Dirty {
+		t.Fatal("Dirty = false after second edit, want true")
+	}
+
+	runCmd(t, m, m.handleCommand("undo"))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Grace"; got != want {
+		t.Fatalf("string after undo to saved revision = %q, want %q", got, want)
+	}
+	if m.Session.Dirty {
+		t.Fatal("Dirty = true after undo to saved revision, want false")
+	}
+
+	runCmd(t, m, m.handleCommand("redo"))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Marie"; got != want {
+		t.Fatalf("string after redo from saved revision = %q, want %q", got, want)
+	}
+	if !m.Session.Dirty {
+		t.Fatal("Dirty = false after redo away from saved revision, want true")
+	}
+}
+
+func TestUndoRedoTracksSavedRevisionAcrossBranchEdits(t *testing.T) {
+	m := testModel(t)
+	nameID := m.Doc.Root.Object[0].Value.ID
+	m.Session.SelectNode(nameID)
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Grace"`)
+	runCmd(t, m, m.submitPrompt())
+
+	path := t.TempDir() + "/saved.json"
+	if err := m.save(path); err != nil {
+		t.Fatalf("save() error = %v", err)
+	}
+
+	runCmd(t, m, m.handleCommand("undo"))
+	if got, want := m.Doc.Root.Object[0].Value.String, "Ada"; got != want {
+		t.Fatalf("string after undo away from saved revision = %q, want %q", got, want)
+	}
+	if !m.Session.Dirty {
+		t.Fatal("Dirty = false after undo away from saved revision, want true")
+	}
+
+	runCmd(t, m, m.startScalarEdit())
+	m.prompt.SetValue(`"Marie"`)
+	runCmd(t, m, m.submitPrompt())
+
+	if got, want := m.Doc.Root.Object[0].Value.String, "Marie"; got != want {
+		t.Fatalf("string after branch edit = %q, want %q", got, want)
+	}
+	if !m.Session.Dirty {
+		t.Fatal("Dirty = false after branch edit, want true")
+	}
+}
+
+func TestUndoRedoRenameKey(t *testing.T) {
+	m := testModel(t)
+	nameID := m.Doc.Root.Object[0].Value.ID
+	m.Session.SelectNode(nameID)
+
+	runCmd(t, m, m.startRename())
+	m.prompt.SetValue("full_name")
+	runCmd(t, m, m.submitPrompt())
+
+	if got, want := m.Doc.Root.Object[0].Key, "full_name"; got != want {
+		t.Fatalf("key after rename = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.undoChange())
+	if got, want := m.Doc.Root.Object[0].Key, "name"; got != want {
+		t.Fatalf("key after undo rename = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.redoChange())
+	if got, want := m.Doc.Root.Object[0].Key, "full_name"; got != want {
+		t.Fatalf("key after redo rename = %q, want %q", got, want)
+	}
+}
+
+func TestUndoRedoDeleteAndAddOperations(t *testing.T) {
+	t.Run("delete", func(t *testing.T) {
+		m := testModel(t)
+		nameID := m.Doc.Root.Object[0].Value.ID
+		m.Session.SelectNode(nameID)
+
+		runCmd(t, m, m.deleteSelected())
+		if got, want := len(m.Doc.Root.Object), 1; got != want {
+			t.Fatalf("object length after delete = %d, want %d", got, want)
+		}
+
+		runCmd(t, m, m.undoChange())
+		if got, want := len(m.Doc.Root.Object), 2; got != want {
+			t.Fatalf("object length after undo delete = %d, want %d", got, want)
+		}
+		if got, want := m.Doc.Root.Object[0].Key, "name"; got != want {
+			t.Fatalf("restored key = %q, want %q", got, want)
+		}
+		if got, want := m.Session.SelectedID, nameID; got != want {
+			t.Fatalf("SelectedID after undo delete = %d, want %d", got, want)
+		}
+
+		runCmd(t, m, m.redoChange())
+		if got, want := len(m.Doc.Root.Object), 1; got != want {
+			t.Fatalf("object length after redo delete = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("object add", func(t *testing.T) {
+		m := testModel(t)
+		m.Session.SelectNode(m.Doc.Root.ID)
+
+		runCmd(t, m, m.startAdd())
+		m.prompt.SetValue(`active=true`)
+		runCmd(t, m, m.submitPrompt())
+
+		if got, want := len(m.Doc.Root.Object), 3; got != want {
+			t.Fatalf("object length after add = %d, want %d", got, want)
+		}
+		if got, want := m.Doc.Root.Object[2].Key, "active"; got != want {
+			t.Fatalf("added key = %q, want %q", got, want)
+		}
+
+		runCmd(t, m, m.undoChange())
+		if got, want := len(m.Doc.Root.Object), 2; got != want {
+			t.Fatalf("object length after undo add = %d, want %d", got, want)
+		}
+
+		runCmd(t, m, m.redoChange())
+		if got, want := len(m.Doc.Root.Object), 3; got != want {
+			t.Fatalf("object length after redo add = %d, want %d", got, want)
+		}
+		if got, want := m.Doc.Root.Object[2].Key, "active"; got != want {
+			t.Fatalf("redo key = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("array add", func(t *testing.T) {
+		m := testModel(t)
+		itemsID := m.Doc.Root.Object[1].Value.ID
+		m.Session.SelectNode(itemsID)
+
+		runCmd(t, m, m.startAdd())
+		m.prompt.SetValue(`3`)
+		runCmd(t, m, m.submitPrompt())
+
+		if got, want := len(m.Doc.Root.Object[1].Value.Array), 3; got != want {
+			t.Fatalf("array length after add = %d, want %d", got, want)
+		}
+		if got, want := m.Doc.Root.Object[1].Value.Array[2].Number, "3"; got != want {
+			t.Fatalf("added number = %q, want %q", got, want)
+		}
+
+		runCmd(t, m, m.undoChange())
+		if got, want := len(m.Doc.Root.Object[1].Value.Array), 2; got != want {
+			t.Fatalf("array length after undo add = %d, want %d", got, want)
+		}
+
+		runCmd(t, m, m.redoChange())
+		if got, want := len(m.Doc.Root.Object[1].Value.Array), 3; got != want {
+			t.Fatalf("array length after redo add = %d, want %d", got, want)
+		}
+		if got, want := m.Doc.Root.Object[1].Value.Array[2].Number, "3"; got != want {
+			t.Fatalf("redo number = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("array delete", func(t *testing.T) {
+		m := testModel(t)
+		items := m.Doc.Root.Object[1].Value
+		deletedID := items.Array[1].ID
+		if !m.Session.RevealNode(m.Doc, deletedID) {
+			t.Fatalf("RevealNode(%d) = false", deletedID)
+		}
+
+		runCmd(t, m, m.deleteSelected())
+		if got, want := len(items.Array), 1; got != want {
+			t.Fatalf("array length after delete = %d, want %d", got, want)
+		}
+		if got, want := items.Array[0].Number, "1"; got != want {
+			t.Fatalf("remaining array item = %q, want %q", got, want)
+		}
+
+		runCmd(t, m, m.undoChange())
+		if got, want := len(items.Array), 2; got != want {
+			t.Fatalf("array length after undo delete = %d, want %d", got, want)
+		}
+		if got, want := items.Array[1].ID, deletedID; got != want {
+			t.Fatalf("restored array item ID = %d, want %d", got, want)
+		}
+		if got, want := m.Session.SelectedID, deletedID; got != want {
+			t.Fatalf("SelectedID after undo delete = %d, want %d", got, want)
+		}
+
+		runCmd(t, m, m.redoChange())
+		if got, want := len(items.Array), 1; got != want {
+			t.Fatalf("array length after redo delete = %d, want %d", got, want)
+		}
+		if got, want := items.Array[0].Number, "1"; got != want {
+			t.Fatalf("remaining array item after redo = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestUndoRedoEmptyHistoryErrors(t *testing.T) {
+	m := testModel(t)
+
+	runCmd(t, m, m.undoChange())
+	if got, want := m.Session.Error, "nothing to undo"; got != want {
+		t.Fatalf("Error after undo = %q, want %q", got, want)
+	}
+
+	runCmd(t, m, m.redoChange())
+	if got, want := m.Session.Error, "nothing to redo"; got != want {
+		t.Fatalf("Error after redo = %q, want %q", got, want)
+	}
+}
+
+func TestUndoRedoAsyncCompletionMessages(t *testing.T) {
+	t.Run("external editor", func(t *testing.T) {
+		m := testModel(t)
+		targetID := m.Doc.Root.Object[0].Value.ID
+		m.Session.SelectNode(targetID)
+
+		applyMsg(t, m, editorFinishedMsg{
+			Node:            mustParseNode(t, `"Grace"`),
+			TargetID:        targetID,
+			Before:          document.CloneNode(m.Doc.Root.Object[0].Value),
+			BeforeSelection: m.Session.SelectedRow(),
+		})
+
+		if got, want := m.Doc.Root.Object[0].Value.String, "Grace"; got != want {
+			t.Fatalf("string after editor msg = %q, want %q", got, want)
+		}
+
+		runCmd(t, m, m.undoChange())
+		if got, want := m.Doc.Root.Object[0].Value.String, "Ada"; got != want {
+			t.Fatalf("string after undo editor msg = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("jq blocks input until completion", func(t *testing.T) {
+		m := testModel(t)
+		runner := newBlockingJQRunner([]byte(`{"name":"Ada","items":[1,2],"active":true}`), nil, nil)
+		m.JQRunner = runner
+		beforeSelection := m.Session.SelectedID
+
+		cmd := m.handleCommand(`jq . + {"active":true}`)
+		if cmd == nil {
+			t.Fatal("handleCommand(jq) returned nil cmd")
+		}
+		if got, want := m.Session.Mode, session.ModeBusy; got != want {
+			t.Fatalf("Mode after jq start = %q, want %q", got, want)
+		}
+		if got, want := m.Session.Status, "running jq..."; got != want {
+			t.Fatalf("Status after jq start = %q, want %q", got, want)
+		}
+
+		msgCh := make(chan tea.Msg, 1)
+		go func() {
+			msgCh <- cmd()
+		}()
+		waitForChannelSignal(t, runner.started, "jq runner start")
+
+		updated, next := m.Update(key("j"))
+		if next != nil {
+			t.Fatal("busy Update(j) returned unexpected cmd")
+		}
+		m = updated.(*Model)
+		if got, want := m.Session.SelectedID, beforeSelection; got != want {
+			t.Fatalf("SelectedID while jq busy = %d, want %d", got, want)
+		}
+		if got, want := m.Session.Mode, session.ModeBusy; got != want {
+			t.Fatalf("Mode while jq busy = %q, want %q", got, want)
+		}
+
+		close(runner.release)
+		applyMsg(t, m, waitForChannelSignal(t, msgCh, "jq completion"))
+
+		if got, want := len(m.Doc.Root.Object), 3; got != want {
+			t.Fatalf("root object length after jq msg = %d, want %d", got, want)
+		}
+		if got, want := m.Session.Mode, session.ModeNormal; got != want {
+			t.Fatalf("Mode after jq completion = %q, want %q", got, want)
+		}
+		if got, want := m.Session.Status, "applied jq transform"; got != want {
+			t.Fatalf("Status after jq completion = %q, want %q", got, want)
+		}
+
+		runCmd(t, m, m.undoChange())
+		if got, want := len(m.Doc.Root.Object), 2; got != want {
+			t.Fatalf("root object length after undo jq msg = %d, want %d", got, want)
+		}
+	})
 }
 
 func TestCommandSaveAndPrint(t *testing.T) {
@@ -853,5 +1303,53 @@ func TestAddArrayItemFromBatchRowTargetsParentArray(t *testing.T) {
 	secondBatch := session.BatchRowID(items.ID, 100)
 	if !m.Session.ExpandedBatches[secondBatch] {
 		t.Fatalf("ExpandedBatches[%v] = false, want true for second batch", secondBatch)
+	}
+}
+
+func TestUndoRedoBatchRowAppendRestoresSelection(t *testing.T) {
+	doc := testLongArrayDoc(t, 101)
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	items := doc.Root.Object[0].Value
+
+	selectFirstBatch(t, m, items.ID)
+	beforeRow, ok := m.Session.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false before batch append")
+	}
+
+	runCmd(t, m, m.startAdd())
+	m.prompt.SetValue("999")
+	runCmd(t, m, m.submitPrompt())
+
+	if got, want := len(items.Array), 102; got != want {
+		t.Fatalf("len(items.Array) after add = %d, want %d", got, want)
+	}
+
+	runCmd(t, m, m.undoChange())
+	if got, want := len(items.Array), 101; got != want {
+		t.Fatalf("len(items.Array) after undo = %d, want %d", got, want)
+	}
+
+	row, ok := m.Session.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after undo batch append")
+	}
+	if !row.IsBatch() || row.BatchLabel() != beforeRow.BatchLabel() {
+		t.Fatalf("CurrentRow() after undo = %#v, want original batch row", row)
+	}
+
+	runCmd(t, m, m.redoChange())
+	if got, want := len(items.Array), 102; got != want {
+		t.Fatalf("len(items.Array) after redo = %d, want %d", got, want)
+	}
+
+	row, ok = m.Session.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after redo batch append")
+	}
+	if row.IsBatch() || row.ArrayIndex != 101 {
+		t.Fatalf("CurrentRow() after redo = %#v, want restored appended row", row)
 	}
 }

@@ -16,6 +16,7 @@ const (
 	ModePrompt   Mode = "prompt"
 	ModeCommand  Mode = "command"
 	ModeSearch   Mode = "search"
+	ModeBusy     Mode = "busy"
 	ModeSettings Mode = "settings"
 )
 

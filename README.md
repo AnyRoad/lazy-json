@@ -18,6 +18,7 @@ The project name and keyboard-first workflow are inspired by [LazyVim](https://g
 - long arrays expand into 100-item batch rows instead of dumping every element at once
 - substring search with `/`, `n`, and `N`
 - structured editing for scalars, object keys, object fields, and array items
+- Vim-style undo/redo for document changes with `u`, `U`, and `ctrl+r`
 - configurable pretty-printed JSON saves
 - file-backed and stdin-backed sessions
 - optional subtree editing through `$EDITOR`
@@ -102,6 +103,8 @@ You can add `--select '$.path.to.node'` to either startup form to open with a sp
 
 The editor is structured, not freeform. You operate on the selected node:
 
+- `u`: undo the last document change
+- `U` / `ctrl+r`: redo the last undone document change
 - `e`: edit the selected scalar value as JSON, such as `"text"`, `42`, `true`, or `null`
 - `a`: add a new field to an object or append a new value to an array
 - `r`: rename the selected object key
@@ -109,6 +112,8 @@ The editor is structured, not freeform. You operate on the selected node:
 - `E`: serialize the selected node or subtree into a temp file, open it in `$EDITOR`, and replace the node only if the edited JSON parses successfully
 
 Batch rows are navigation-only placeholders for long arrays. You can still press `a` on a batch row to append to its parent array, but edit, rename, delete, and subtree-copy actions require a real node selection.
+
+Undo and redo track document changes only. Navigation, folds, search query changes, theme previews, and settings changes are not part of edit history. Saving marks the current revision as the saved point instead of clearing history, so undoing back to that revision clears the dirty indicator.
 
 This keeps edits valid and avoids the complexity of embedding a full text editor into the TUI.
 
@@ -138,6 +143,8 @@ Search matches nodes across the whole document based on keys, scalar values, and
 - `:print`: print pretty JSON to stdout and quit
 - `:q`: quit if there are no unsaved changes
 - `:q!`: quit without saving
+- `:undo`: undo the last document change
+- `:redo`: redo the last undone document change
 - `:theme`: quick-preview the next theme without saving
 - `:settings`: open the settings dialog
 - `:select-path $.items[0].name`: select a node by JSON path using the same syntax as `--select`
