@@ -290,7 +290,7 @@ func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int
 				prefix = continuationPrefix
 			}
 			line := prefix + theme.String.Render(part)
-			lines = append(lines, m.decorateRowLine(row, theme, trimWidth(line, width)))
+			lines = append(lines, m.decorateWrappedRowLine(row, theme, trimWidth(line, width), index == 0))
 		}
 		return lines
 	}
@@ -326,17 +326,21 @@ func (m *Model) renderWrappedStringLines(row session.Row, theme Theme, width int
 		if index == len(parts)-1 && pathWidth < wrapWidth {
 			line += theme.Muted.Render(pathSuffix)
 		}
-		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(line, width)))
+		lines = append(lines, m.decorateWrappedRowLine(row, theme, trimWidth(line, width), index == 0))
 	}
 	if pathWidth >= wrapWidth {
 		pathPrefix := m.lineNumberBlankPrefixWithWidth(lineNumberWidth) + strings.Repeat("  ", row.Depth) + "  "
-		lines = append(lines, m.decorateRowLine(row, theme, trimWidth(pathPrefix+theme.Muted.Render(row.Path), width)))
+		lines = append(lines, m.decorateWrappedRowLine(row, theme, trimWidth(pathPrefix+theme.Muted.Render(row.Path), width), false))
 	}
 	return lines
 }
 
 func (m *Model) decorateRowLine(row session.Row, theme Theme, line string) string {
-	if row.ID == m.Session.SelectedRow() {
+	return m.decorateWrappedRowLine(row, theme, line, true)
+}
+
+func (m *Model) decorateWrappedRowLine(row session.Row, theme Theme, line string, allowSelection bool) string {
+	if allowSelection && row.ID == m.Session.SelectedRow() {
 		return theme.Selected.Render(line)
 	}
 	if !row.IsBatch() && m.Session.HasSearchHit(row.NodeID) {

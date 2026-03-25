@@ -427,6 +427,38 @@ func TestRenderRowLinesShowsLineNumberOnlyOnFirstWrappedLine(t *testing.T) {
 	}
 }
 
+func TestRenderRowLinesAppliesSelectionOnlyToFirstWrappedLine(t *testing.T) {
+	doc, err := document.Parse([]byte(`{"name":"abcdefghijklmnopqrstuvwxyz"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{})
+	row := m.Session.Rows[1]
+	theme := m.theme()
+	theme.Selected = lipgloss.NewStyle().PaddingLeft(1)
+	m.ActiveSettings.WrapLongStrings = true
+	m.Session.SelectNode(row.NodeID)
+
+	selected := m.renderRowLines(row, theme, 20)
+	if len(selected) < 2 {
+		t.Fatalf("len(selected) = %d, want at least 2", len(selected))
+	}
+
+	m.Session.SelectNode(m.Doc.Root.ID)
+	unselected := m.renderRowLines(row, theme, 20)
+	if len(unselected) != len(selected) {
+		t.Fatalf("len(unselected) = %d, want %d", len(unselected), len(selected))
+	}
+	if selected[0] == unselected[0] {
+		t.Fatal("first wrapped line did not change under selection")
+	}
+	for index := 1; index < len(selected); index++ {
+		if selected[index] != unselected[index] {
+			t.Fatalf("continuation line %d changed under selection; got %q want %q", index, selected[index], unselected[index])
+		}
+	}
+}
+
 func TestRenderRowLinesHideJSONPath(t *testing.T) {
 	doc, err := document.Parse([]byte(`{"name":"abcdefghijklmnopqrstuvwxyz"}`))
 	if err != nil {
