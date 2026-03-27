@@ -55,3 +55,30 @@ func TestApplyJQFailure(t *testing.T) {
 		t.Fatal("ApplyJQ() error = nil, want error")
 	}
 }
+
+func TestApplyJQFailureWithoutStderr(t *testing.T) {
+	node, err := document.ParseNode([]byte(`{"count":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ApplyJQ(stubRunner{err: errors.New("exit status 3")}, ".", node)
+	if err == nil {
+		t.Fatal("ApplyJQ() error = nil, want error")
+	}
+	if got, want := err.Error(), "jq failed: exit status 3"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestExecJQRunnerRun(t *testing.T) {
+	stdout, stderr, err := ExecJQRunner{}.Run("sh", []string{"-c", "cat; printf 'warn' >&2"}, []byte("input"))
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := string(stdout), "input"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := string(stderr), "warn"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}

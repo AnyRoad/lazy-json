@@ -21,6 +21,26 @@ func TestPathsFromUserConfigDir(t *testing.T) {
 	}
 }
 
+func TestResolvePathsUsesUserConfigDir(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(homeDir, "xdg-config"))
+
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("UserConfigDir() error = %v", err)
+	}
+
+	paths, err := ResolvePaths()
+	if err != nil {
+		t.Fatalf("ResolvePaths() error = %v", err)
+	}
+
+	if got, want := paths, PathsFromUserConfigDir(userConfigDir); got != want {
+		t.Fatalf("ResolvePaths() = %#v, want %#v", got, want)
+	}
+}
+
 func TestLoadSettingsMissingReturnsDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), SettingsFileName)
 

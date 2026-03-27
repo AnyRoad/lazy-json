@@ -92,6 +92,38 @@ func TestRefreshAndPaths(t *testing.T) {
 	}
 }
 
+func TestSearchableTextIncludesPathKeyAndSummary(t *testing.T) {
+	row := Row{
+		Path:    "$.items[0].title",
+		Key:     "title",
+		Summary: "Alpha",
+	}
+
+	got := SearchableText(row)
+	for _, want := range []string{"$.items[0].title", "title", "alpha"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("SearchableText() = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestCountHiddenRowsIncludesBatchHeaders(t *testing.T) {
+	doc := testLongScalarArrayDoc(t, 101)
+	items := doc.Root.Object[0].Value
+
+	lineNumber := 0
+	countHiddenBatchRows(items, &lineNumber)
+	if got, want := lineNumber, 103; got != want {
+		t.Fatalf("countHiddenBatchRows() = %d, want %d", got, want)
+	}
+
+	lineNumber = 0
+	countHiddenRows(items, &lineNumber)
+	if got, want := lineNumber, 104; got != want {
+		t.Fatalf("countHiddenRows() = %d, want %d", got, want)
+	}
+}
+
 func TestBuildRowsPreservesGlobalLineNumberGapsWhenCollapsed(t *testing.T) {
 	doc := testDocWithSiblingBranches(t)
 	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
@@ -245,6 +277,30 @@ func TestMoveIntoAndCollapseLongArrayBatches(t *testing.T) {
 	}
 }
 
+func TestExpandSelectedExpandsContainersAndBatches(t *testing.T) {
+	doc := testLongScalarArrayDoc(t, 101)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+
+	s.SelectNode(items.ID)
+	s.ExpandSelected()
+	if !s.Expanded[items.ID] {
+		t.Fatal("ExpandSelected() did not expand array container")
+	}
+
+	s.Refresh(doc)
+	s.MoveInto(doc)
+	row, ok := s.CurrentRow()
+	if !ok || !row.IsBatch() {
+		t.Fatalf("CurrentRow() = %#v, want batch row after entering long array", row)
+	}
+
+	s.ExpandSelected()
+	if !s.ExpandedBatches[row.ID] {
+		t.Fatal("ExpandSelected() did not expand batch row")
+	}
+}
+
 func TestSearchRevealExpandsMatchingLongArrayBatch(t *testing.T) {
 	doc := testLongObjectArrayDoc(t, 150)
 	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
@@ -305,6 +361,48 @@ func TestRefreshReselectsVisibleParentWhenBatchRowDisappearsAfterEdit(t *testing
 	}
 	if row.IsBatch() || row.NodeID != items.ID {
 		t.Fatalf("CurrentRow() = %#v, want items array row after batch disappears", row)
+	}
+}
+
+func TestCurrentBatchRowIDForArrayAndBatchCleanup(t *testing.T) {
+	doc := testLongScalarArrayDoc(t, 101)
+	s := New(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, "")
+	items := doc.Root.Object[0].Value
+
+	s.SelectNode(items.ID)
+	s.MoveInto(doc)
+	s.Refresh(doc)
+	s.MoveInto(doc)
+	row, ok := s.CurrentRow()
+	if !ok || !row.IsBatch() {
+		t.Fatalf("CurrentRow() = %#v, want batch row", row)
+	}
+
+	if got, ok := s.currentBatchRowIDForArray(doc, items.ID); !ok || got != row.ID {
+		t.Fatalf("currentBatchRowIDForArray() = (%#v, %t), want (%#v, true)", got, ok, row.ID)
+	}
+
+	s.MoveInto(doc)
+	s.Refresh(doc)
+	s.MoveInto(doc)
+
+	got, ok := s.currentBatchRowIDForArray(doc, items.ID)
+	if !ok || got != row.ID {
+		t.Fatalf("currentBatchRowIDForArray(descendant) = (%#v, %t), want (%#v, true)", got, ok, row.ID)
+	}
+
+	otherBatch := BatchRowID(doc.Root.ID+999, 100)
+	s.ExpandedBatches = map[RowID]bool{
+		row.ID:                    true,
+		BatchRowID(items.ID, 100): true,
+		otherBatch:                true,
+	}
+	s.deleteBatchExpansionsForArray(items.ID)
+	if s.ExpandedBatches[row.ID] || s.ExpandedBatches[BatchRowID(items.ID, 100)] {
+		t.Fatalf("ExpandedBatches = %#v, want array batches cleared", s.ExpandedBatches)
+	}
+	if !s.ExpandedBatches[otherBatch] {
+		t.Fatalf("ExpandedBatches = %#v, want unrelated batch preserved", s.ExpandedBatches)
 	}
 }
 

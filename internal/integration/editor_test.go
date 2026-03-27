@@ -28,6 +28,12 @@ func TestSerializeAndReadEditedNode(t *testing.T) {
 	}
 }
 
+func TestSerializeNodeToTempRejectsUnsupportedNode(t *testing.T) {
+	if _, err := SerializeNodeToTemp(&document.Node{Kind: document.Kind("unknown")}); err == nil {
+		t.Fatal("SerializeNodeToTemp() error = nil, want error")
+	}
+}
+
 func TestEditorCommandRunsScript(t *testing.T) {
 	script := filepath.Join(t.TempDir(), "editor.sh")
 	content := "#!/bin/sh\nprintf '{\"edited\":true}\\n' > \"$1\"\n"
@@ -64,4 +70,22 @@ func TestEditorCommandRejectsEmptyEditor(t *testing.T) {
 	if _, err := EditorCommand("", "sample.json"); err == nil {
 		t.Fatal("EditorCommand() error = nil, want error")
 	}
+}
+
+func TestReadEditedNodeErrors(t *testing.T) {
+	t.Run("missing file", func(t *testing.T) {
+		if _, err := ReadEditedNode(filepath.Join(t.TempDir(), "missing.json")); err == nil {
+			t.Fatal("ReadEditedNode() error = nil, want error")
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "broken.json")
+		if err := os.WriteFile(path, []byte(`{"name":`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadEditedNode(path); err == nil {
+			t.Fatal("ReadEditedNode() error = nil, want error")
+		}
+	})
 }

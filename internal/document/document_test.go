@@ -26,6 +26,48 @@ func TestParsePreservesOrderAndNumbers(t *testing.T) {
 	}
 }
 
+func TestNewSetsNextIDAndNodeLen(t *testing.T) {
+	root := &Node{
+		ID:   10,
+		Kind: KindObject,
+		Object: []ObjectEntry{
+			{
+				Key: "items",
+				Value: &Node{
+					ID:   42,
+					Kind: KindArray,
+					Array: []*Node{
+						{ID: 43, Kind: KindString, String: "Ada"},
+					},
+				},
+			},
+		},
+	}
+
+	doc := New(root)
+
+	flag, err := ParseNode([]byte(`true`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := doc.AddObjectEntry(root.ID, "active", flag); err != nil {
+		t.Fatalf("AddObjectEntry() error = %v", err)
+	}
+
+	if got, want := root.Len(), 2; got != want {
+		t.Fatalf("root.Len() = %d, want %d", got, want)
+	}
+	if got, want := root.Object[0].Value.Len(), 1; got != want {
+		t.Fatalf("items.Len() = %d, want %d", got, want)
+	}
+	if got := root.Object[1].Value.Len(); got != 0 {
+		t.Fatalf("scalar.Len() = %d, want 0", got)
+	}
+	if got := root.Object[1].Value.ID; got <= 43 {
+		t.Fatalf("new object entry ID = %d, want value above existing max", got)
+	}
+}
+
 func TestMarshalIndent(t *testing.T) {
 	doc, err := Parse([]byte(`{"name":"Ada","list":[1,true,null]}`))
 	if err != nil {
@@ -38,6 +80,20 @@ func TestMarshalIndent(t *testing.T) {
 	want := "{\n  \"name\": \"Ada\",\n  \"list\": [\n    1,\n    true,\n    null\n  ]\n}\n"
 	if string(got) != want {
 		t.Fatalf("MarshalIndent() = %q, want %q", got, want)
+	}
+}
+
+func TestMarshalIndentRejectsEmptyDocumentAndNormalizesIndent(t *testing.T) {
+	doc := &Document{}
+
+	if _, err := doc.MarshalIndent(); err == nil {
+		t.Fatal("MarshalIndent() error = nil, want error")
+	}
+	if _, err := doc.MarshalIndentWith("\t"); err == nil {
+		t.Fatal("MarshalIndentWith() error = nil, want error")
+	}
+	if got, want := normalizeIndent(""), defaultIndent; got != want {
+		t.Fatalf("normalizeIndent(\"\") = %q, want %q", got, want)
 	}
 }
 

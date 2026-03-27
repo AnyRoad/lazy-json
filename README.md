@@ -268,6 +268,8 @@ Pretty JSON output follows the current `Save indent` setting from the settings d
 - `make fmt-check`: fail if formatting is not clean
 - `make vet`: run `go vet ./...`
 - `make test`: run `go test ./...`
+- `make cover`: run repo-wide coverage with `-coverpkg`, filtering out `internal/perftest` from the final profile
+- `make badge-cover`: regenerate `docs/badges/coverage.svg` from the current coverage profile
 - `make perf`: run the session/TUI benchmark suite with `-benchmem`
 - `make perf-save`: save the current benchmark baseline to `.perf/perf.baseline.txt`
 - `make perf-compare`: compare current benchmark output against the saved baseline, using `benchstat` when available
@@ -323,12 +325,13 @@ GOCACHE=/tmp/lazy-json-gocache GOMODCACHE=/tmp/lazy-json-gomodcache make check
 ### Badges
 
 `README.md` uses the live GitHub Actions badge for quality and a committed static SVG for coverage at `docs/badges/coverage.svg`.
+The coverage badge is generated from the repo-wide `-coverpkg` total, with benchmark-only helpers under `internal/perftest` filtered out of the final profile.
 
 To refresh the coverage percentage manually:
 
 ```bash
-go test ./... -coverprofile=/tmp/lazy-json-coverage.out
-go tool cover -func=/tmp/lazy-json-coverage.out | tail -n 1
+make cover
+make badge-cover
 ```
 
 ### GitHub Actions

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -280,6 +281,35 @@ func TestNavigationAndThemeSwitch(t *testing.T) {
 	}
 	if got, want := m.Settings.Theme, lastBuiltinThemeName(t); got != want {
 		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+}
+
+func TestModelInitSummaryStringAndMovePage(t *testing.T) {
+	m := testModel(t)
+	if cmd := m.Init(); cmd == nil {
+		t.Fatal("Init() = nil, want blink command")
+	}
+	if got, want := m.Summary(), "3 rows"; got != want {
+		t.Fatalf("Summary() = %q, want %q", got, want)
+	}
+	if got, want := m.String(), strings.TrimSpace(m.View()); got != want {
+		t.Fatalf("String() = %q, want %q", got, want)
+	}
+
+	doc := testFlatObjectDoc(t, 20)
+	m = NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+		Clipboard: &stubClipboard{},
+	})
+	m.Width = 120
+	m.Height = 6
+	m.movePage(1)
+
+	row, ok := m.Session.CurrentRow()
+	if !ok {
+		t.Fatal("CurrentRow() = false after movePage")
+	}
+	if got, want := row.Index, 5; got != want {
+		t.Fatalf("row.Index after movePage = %d, want %d", got, want)
 	}
 }
 
@@ -852,6 +882,79 @@ func TestCommandSaveAndPrint(t *testing.T) {
 	}
 }
 
+func TestSaveAndQuitAndPrintDirectHelpers(t *testing.T) {
+	t.Run("stdin writes exit output", func(t *testing.T) {
+		doc, err := document.Parse([]byte(`{"name":"Ada"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := NewModel(doc, source.Input{Kind: source.KindStdin}, ModelOptions{
+			Clipboard: &stubClipboard{},
+		})
+
+		cmd := m.saveAndQuit("")
+		if cmd == nil || cmd() == nil {
+			t.Fatal("saveAndQuit() = nil, want quit command")
+		}
+		if got := string(m.ExitOutput); !strings.Contains(got, `"name": "Ada"`) {
+			t.Fatalf("ExitOutput = %q, want formatted JSON", got)
+		}
+	})
+
+	t.Run("explicit path saves file", func(t *testing.T) {
+		m := testModel(t)
+		path := filepath.Join(t.TempDir(), "saved.json")
+
+		cmd := m.saveAndQuit(path)
+		if cmd == nil || cmd() == nil {
+			t.Fatal("saveAndQuit(path) = nil, want quit command")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%q) error = %v", path, err)
+		}
+		if got := string(data); !strings.Contains(got, `"name": "Ada"`) {
+			t.Fatalf("saved file = %q, want JSON content", got)
+		}
+		if got, want := m.Session.SourcePath, path; got != want {
+			t.Fatalf("SourcePath = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("print writes exit output", func(t *testing.T) {
+		m := testModel(t)
+		cmd := m.printAndQuit()
+		if cmd == nil || cmd() == nil {
+			t.Fatal("printAndQuit() = nil, want quit command")
+		}
+		if got := string(m.ExitOutput); !strings.Contains(got, `"items": [`) {
+			t.Fatalf("ExitOutput = %q, want pretty JSON", got)
+		}
+	})
+}
+
+func TestHandleCommandUnknownWritePathAndForceQuit(t *testing.T) {
+	m := testModel(t)
+
+	runCmd(t, m, m.handleCommand("unknown"))
+	if got, want := m.Session.Error, "unknown command: :unknown"; got != want {
+		t.Fatalf("Error = %q, want %q", got, want)
+	}
+
+	path := filepath.Join(t.TempDir(), "saved.json")
+	runCmd(t, m, m.handleCommand("w "+path))
+	if got, want := m.Session.Status, "saved"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("saved file stat error = %v", err)
+	}
+
+	if cmd := m.handleCommand("q!"); cmd == nil || cmd() == nil {
+		t.Fatal("handleCommand(q!) = nil, want quit command")
+	}
+}
+
 func TestSavePrintAndPrettyCopyUseActiveSaveIndent(t *testing.T) {
 	clipboard := &stubClipboard{}
 	m := testModelWithOptions(t, ModelOptions{Clipboard: clipboard})
@@ -1023,6 +1126,41 @@ func TestCopySubtreeAndClipboardFailure(t *testing.T) {
 	if got, want := clipboard.writes[len(clipboard.writes)-1], `"Ada"`; got != want {
 		t.Fatalf("clipboard write = %q, want %q", got, want)
 	}
+}
+
+func TestApplyJQAndEditExternalValidationErrors(t *testing.T) {
+	t.Run("empty jq expression", func(t *testing.T) {
+		m := testModel(t)
+		runCmd(t, m, m.applyJQ("", false))
+		if got, want := m.Session.Error, "jq expression cannot be empty"; got != want {
+			t.Fatalf("Error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("batch row cannot run subtree jq", func(t *testing.T) {
+		doc := testLongArrayDoc(t, 101)
+		m := NewModel(doc, source.Input{Kind: source.KindFile, Path: "sample.json"}, ModelOptions{
+			Clipboard: &stubClipboard{},
+		})
+		items := doc.Root.Object[0].Value
+		selectFirstBatch(t, m, items.ID)
+
+		runCmd(t, m, m.applyJQ(". + 1", true))
+		if got, want := m.Session.Error, "batch rows are navigation only"; got != want {
+			t.Fatalf("Error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("external edit requires editor", func(t *testing.T) {
+		m := testModel(t)
+		m.Session.SelectNode(m.Doc.Root.Object[0].Value.ID)
+		t.Setenv("EDITOR", "")
+
+		runCmd(t, m, m.editExternal())
+		if got, want := m.Session.Error, "$EDITOR is not set"; got != want {
+			t.Fatalf("Error = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestSettingsModalPreviewsWrapAndIndentWithoutSaving(t *testing.T) {

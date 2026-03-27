@@ -505,3 +505,43 @@ func TestViewShowsLineNumbersWithoutJSONPath(t *testing.T) {
 		t.Fatalf("View() = %q, want JSON path hidden while line numbers remain visible", view)
 	}
 }
+
+func TestViewHelperPrefixesAndSliceVisibleLines(t *testing.T) {
+	m := testModelWithOptions(t, ModelOptions{
+		Settings: config.DefaultSettings().WithShowLineNumbers(true),
+	})
+	theme := m.theme()
+	row := m.Session.Rows[1]
+
+	if got, want := m.lineNumberWidth(), 1; got != want {
+		t.Fatalf("lineNumberWidth() = %d, want %d", got, want)
+	}
+	if got, want := stripANSI(m.renderLineNumberPrefix(row, theme)), "2 "; got != want {
+		t.Fatalf("renderLineNumberPrefix() = %q, want %q", got, want)
+	}
+	if got, want := m.lineNumberBlankPrefix(), "  "; got != want {
+		t.Fatalf("lineNumberBlankPrefix() = %q, want %q", got, want)
+	}
+	if got, want := sliceVisibleLines([][]string{{"a", "b"}, {"c"}, {"d", "e"}}, 1, 4), []string{"b", "c", "d"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("sliceVisibleLines() = %v, want %v", got, want)
+	}
+}
+
+func TestRenderRowAndLabelHelpers(t *testing.T) {
+	m := testModel(t)
+	theme := m.theme()
+	row := m.Session.Rows[1]
+
+	label := stripANSI(m.renderRowLabel(row, theme))
+	if !strings.Contains(label, `name: `) {
+		t.Fatalf("renderRowLabel() = %q, want object-key label", label)
+	}
+
+	line := stripANSI(m.renderRow(row, theme))
+	if !strings.Contains(line, `name: "Ada"`) {
+		t.Fatalf("renderRow() = %q, want rendered value", line)
+	}
+	if !strings.Contains(line, `$.name`) {
+		t.Fatalf("renderRow() = %q, want JSON path suffix", line)
+	}
+}

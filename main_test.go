@@ -176,6 +176,57 @@ func TestRunVersionWritesVersion(t *testing.T) {
 	}
 }
 
+func TestRunReturnsUsageWhenNoInput(t *testing.T) {
+	stdin, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close() })
+
+	err = run(nil, stdin, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("run() error = nil, want usage error")
+	}
+	if got, want := err.Error(), usageLine; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestRunRejectsMultipleInputPaths(t *testing.T) {
+	stdin, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close() })
+
+	err = run([]string{"one.json", "two.json"}, stdin, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("run() error = nil, want path-count error")
+	}
+	if got, want := err.Error(), "expected at most one file path"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+func TestRunReportsParseErrorForInvalidJSONFile(t *testing.T) {
+	stdin, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close() })
+
+	path := filepath.Join(t.TempDir(), "broken.json")
+	writeTestFile(t, path, []byte(`{"name":`))
+
+	err = run([]string{path}, stdin, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("run() error = nil, want parse failure")
+	}
+	if !strings.Contains(err.Error(), "parse json:") {
+		t.Fatalf("error = %q, want parse json prefix", err.Error())
+	}
+}
+
 func TestApplyStartupSelection(t *testing.T) {
 	model := newNestedTestModel(t)
 
@@ -473,6 +524,28 @@ func TestLoadModelOptionsWarnsWhenConfigPathsCannotBeResolved(t *testing.T) {
 	}
 	if !strings.Contains(model.Session.Status, "resolve config paths: boom") {
 		t.Fatalf("Status = %q, want resolve config paths warning", model.Session.Status)
+	}
+}
+
+func TestLoadModelOptionsUsesResolvedPaths(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("HOME", configHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(configHome, "xdg-config"))
+
+	paths, err := config.ResolvePaths()
+	if err != nil {
+		t.Fatalf("ResolvePaths() error = %v", err)
+	}
+
+	options := loadModelOptions()
+	if got, want := options.SettingsPath, paths.SettingsFile; got != want {
+		t.Fatalf("SettingsPath = %q, want %q", got, want)
+	}
+	if got, want := options.Settings.Theme, config.DefaultThemeName; got != want {
+		t.Fatalf("Settings.Theme = %q, want %q", got, want)
+	}
+	if options.SettingsFilePresent {
+		t.Fatal("SettingsFilePresent = true, want false without settings file")
 	}
 }
 

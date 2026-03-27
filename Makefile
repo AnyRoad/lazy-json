@@ -5,6 +5,9 @@ GO_FILES := $(shell find . -name '*.go' -type f -not -path './.gocache/*' -not -
 GO_TEST_ENV := GOCACHE=$(CURDIR)/.gocache
 GO_BUILD_ENV := GOCACHE=$(CURDIR)/.gocache
 GO_BUILD_FLAGS := -buildvcs=false
+COVER_DIR := .coverage
+COVER_RAW_PROFILE := $(COVER_DIR)/coverage.raw.out
+COVER_PROFILE := $(COVER_DIR)/coverage.out
 PERF_PACKAGES := ./internal/session ./internal/tui
 PERF_BENCH_ARGS := -run '^$$' -bench . -benchmem -count=1
 PERF_BASELINE ?= .perf/perf.baseline.txt
@@ -12,7 +15,7 @@ PERF_CURRENT ?= .perf/perf.current.txt
 PERF_CMD = $(GO_TEST_ENV) go test $(PERF_PACKAGES) $(PERF_BENCH_ARGS)
 GORELEASER ?= goreleaser
 
-.PHONY: fmt fmt-check vet test perf perf-save perf-compare release-check release-snapshot build build-all clean check
+.PHONY: fmt fmt-check vet test cover badge-cover perf perf-save perf-compare release-check release-snapshot build build-all clean check
 
 fmt:
 	gofmt -w $(GO_FILES)
@@ -25,6 +28,12 @@ vet:
 
 test:
 	go test ./...
+
+cover:
+	sh scripts/coverage-profile.sh "$(COVER_PROFILE)" "$(COVER_RAW_PROFILE)"
+
+badge-cover: cover
+	sh scripts/update-coverage-badge.sh "$(COVER_PROFILE)" "docs/badges/coverage.svg"
 
 perf:
 	$(PERF_CMD)
