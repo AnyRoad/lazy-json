@@ -7,6 +7,8 @@
 
 `lazy-json` is a keyboard-first JSON viewer and editor for the terminal, built with Go and Bubble Tea. It focuses on structured JSON editing instead of raw text editing: move around a tree, expand and collapse nodes, search, edit scalars, add and remove nodes, hand subtrees to your external editor, and optionally run `jq` transforms without leaving the app.
 
+![about](images/about.png)
+
 The project name and keyboard-first workflow are inspired by [LazyVim](https://github.com/LazyVim/LazyVim) and [lazygit](https://github.com/jesseduffield/lazygit): fast navigation, modal interactions, and useful shortcuts over heavyweight UI.
 
 ## Features
