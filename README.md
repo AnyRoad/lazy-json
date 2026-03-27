@@ -1,6 +1,7 @@
 # lazy-json
 
 [![Quality](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml/badge.svg?branch=release)](https://github.com/anyroad/lazy-json/actions/workflows/ci.yml?query=branch%3Arelease)
+[![Go Report Card](https://goreportcard.com/badge/github.com/anyroad/lazy-json)](https://goreportcard.com/report/github.com/anyroad/lazy-json)
 [![Coverage](docs/badges/coverage.svg)](docs/badges/coverage.svg)
 [![Release](https://img.shields.io/github/v/release/anyroad/lazy-json)](https://github.com/anyroad/lazy-json/releases)
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go)](https://go.dev/dl/)
