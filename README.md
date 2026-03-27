@@ -24,9 +24,37 @@ The project name and keyboard-first workflow are inspired by [LazyVim](https://g
 - optional subtree editing through `$EDITOR`
 - optional `jq` transforms through `:jq` and `:jq!`
 
-## Quick Start
+## Installation
 
-### Install from source
+### Install with Homebrew (recommended)
+
+```bash
+brew tap anyroad/apps
+brew install lazy-json
+lazy-json --version
+```
+
+You can also install directly without a separate tap step:
+
+```bash
+brew install anyroad/apps/lazy-json
+```
+
+### Install with Go
+
+```bash
+go install github.com/anyroad/lazy-json@latest
+lazy-json --version
+```
+
+### Download a release from GitHub
+
+Download the archive for your platform from [GitHub Releases](https://github.com/anyroad/lazy-json/releases), extract it, and place `lazy-json` somewhere in your `PATH`.
+
+- macOS and Linux releases are published as `.tar.gz`
+- Windows releases are published as `.zip`
+
+### Build from a checkout
 
 ```bash
 git clone https://github.com/anyroad/lazy-json.git
@@ -38,9 +66,11 @@ make build
 ### Build directly with Go
 
 ```bash
-go build -o dist/lazy-json ./cmd/lazy-json
+go build -o dist/lazy-json .
 ./dist/lazy-json testdata/basic.json
 ```
+
+## Quick Start
 
 ### Open a file
 
@@ -239,6 +269,8 @@ Pretty JSON output follows the current `Save indent` setting from the settings d
 - `make perf`: run the session/TUI benchmark suite with `-benchmem`
 - `make perf-save`: save the current benchmark baseline to `.perf/perf.baseline.txt`
 - `make perf-compare`: compare current benchmark output against the saved baseline, using `benchstat` when available
+- `make release-check`: validate `.goreleaser.yml`
+- `make release-snapshot`: build snapshot release artifacts locally with GoReleaser
 - `make build`: build `dist/lazy-json` for the current platform
 - `make build-all`: cross-compile release binaries for the supported target set
 - `make check`: run format check, vet, and tests
@@ -251,6 +283,13 @@ Recommended local check before pushing:
 ```bash
 make check
 make build
+```
+
+Release dry-run workflow:
+
+```bash
+make release-check
+make release-snapshot
 ```
 
 Benchmark workflow:
@@ -293,7 +332,7 @@ go tool cover -func=/tmp/lazy-json-coverage.out | tail -n 1
 ### GitHub Actions
 
 - `CI`: runs on pushes and pull requests targeting the `release` branch, and executes `make check` plus `make build`
-- `Release`: runs when a tag matching `v*` is pushed, cross-compiles release archives for Linux, macOS, and Windows, generates checksums, and uploads them to GitHub Releases
+- `Release`: runs when a tag matching `v*` is pushed, invokes GoReleaser, uploads GitHub release assets, generates checksums, and updates the `anyroad/homebrew-apps` tap
 
 Create a release tag:
 
@@ -301,6 +340,8 @@ Create a release tag:
 git tag v0.1.0
 git push origin v0.1.0
 ```
+
+The release workflow expects a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to `anyroad/homebrew-apps`.
 
 ## Current Limitations
 

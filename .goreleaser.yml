@@ -1,0 +1,66 @@
+version: 2
+
+project_name: lazy-json
+
+builds:
+  - id: lazy-json
+    main: .
+    binary: lazy-json
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -buildvcs=false
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: release
+    ids:
+      - lazy-json
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: anyroad
+    name: lazy-json
+
+brews:
+  - ids:
+      - release
+    name: lazy-json
+    homepage: "https://github.com/anyroad/lazy-json"
+    description: "Keyboard-first JSON viewer and editor for the terminal"
+    license: "MIT"
+    directory: Formula
+    repository:
+      owner: anyroad
+      name: homebrew-apps
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: anyroad-bot
+      email: noreply@users.noreply.github.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} {{ .Tag }}"
+    install: |
+      bin.install "lazy-json"
+    test: |
+      system "#{bin}/lazy-json", "--version"

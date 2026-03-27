@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -17,11 +18,13 @@ import (
 
 func TestParseStartupArgs(t *testing.T) {
 	testCases := []struct {
-		name       string
-		args       []string
-		wantPath   string
-		wantInputs []string
-		wantErr    string
+		name        string
+		args        []string
+		wantPath    string
+		wantInputs  []string
+		wantHelp    bool
+		wantVersion bool
+		wantErr     string
 	}{
 		{
 			name:       "file only",
@@ -45,6 +48,24 @@ func TestParseStartupArgs(t *testing.T) {
 			args:       []string{"--select=$.items[0].title"},
 			wantPath:   "$.items[0].title",
 			wantInputs: nil,
+		},
+		{
+			name:       "help flag",
+			args:       []string{"--help"},
+			wantHelp:   true,
+			wantInputs: []string{},
+		},
+		{
+			name:       "short help flag",
+			args:       []string{"-h"},
+			wantHelp:   true,
+			wantInputs: []string{},
+		},
+		{
+			name:        "version flag",
+			args:        []string{"--version"},
+			wantVersion: true,
+			wantInputs:  []string{},
 		},
 		{
 			name:       "end of flags preserves filename",
@@ -97,6 +118,12 @@ func TestParseStartupArgs(t *testing.T) {
 			if got, want := parsed.SelectPath, testCase.wantPath; got != want {
 				t.Fatalf("SelectPath = %q, want %q", got, want)
 			}
+			if got, want := parsed.ShowHelp, testCase.wantHelp; got != want {
+				t.Fatalf("ShowHelp = %t, want %t", got, want)
+			}
+			if got, want := parsed.ShowVersion, testCase.wantVersion; got != want {
+				t.Fatalf("ShowVersion = %t, want %t", got, want)
+			}
 			if got, want := parsed.InputArgs, testCase.wantInputs; len(got) != len(want) {
 				t.Fatalf("InputArgs = %v, want %v", got, want)
 			} else {
@@ -107,6 +134,45 @@ func TestParseStartupArgs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRunHelpWritesUsage(t *testing.T) {
+	stdin, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close() })
+
+	var stdout bytes.Buffer
+	if err := run([]string{"--help"}, stdin, &stdout); err != nil {
+		t.Fatalf("run(--help) error = %v", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, usageLine) {
+		t.Fatalf("stdout = %q, want usage line", got)
+	}
+	if got := stdout.String(); !strings.Contains(got, "--version") {
+		t.Fatalf("stdout = %q, want version flag description", got)
+	}
+}
+
+func TestRunVersionWritesVersion(t *testing.T) {
+	stdin, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close() })
+
+	originalVersion := version
+	version = "v1.2.3"
+	t.Cleanup(func() { version = originalVersion })
+
+	var stdout bytes.Buffer
+	if err := run([]string{"--version"}, stdin, &stdout); err != nil {
+		t.Fatalf("run(--version) error = %v", err)
+	}
+	if got, want := stdout.String(), "lazy-json v1.2.3\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }
 

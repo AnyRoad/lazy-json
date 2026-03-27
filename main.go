@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -14,28 +15,42 @@ import (
 	"github.com/anyroad/lazy-json/internal/tui"
 )
 
+const usageLine = "usage: lazy-json [--select <path>] <file.json> or cat file.json | lazy-json [--select <path>]"
+
+var version = "dev"
+
+type startupArgs struct {
+	SelectPath  string
+	InputArgs   []string
+	ShowHelp    bool
+	ShowVersion bool
+}
+
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-type startupArgs struct {
-	SelectPath string
-	InputArgs  []string
-}
-
-func run(args []string) error {
+func run(args []string, stdin *os.File, stdout io.Writer) error {
 	startup, err := parseStartupArgs(args)
 	if err != nil {
 		return err
 	}
+	if startup.ShowHelp {
+		_, err := io.WriteString(stdout, helpText())
+		return err
+	}
+	if startup.ShowVersion {
+		_, err := fmt.Fprintf(stdout, "lazy-json %s\n", version)
+		return err
+	}
 
-	input, err := source.Load(startup.InputArgs, os.Stdin)
+	input, err := source.Load(startup.InputArgs, stdin)
 	if err != nil {
 		if errors.Is(err, source.ErrNoInput) {
-			return fmt.Errorf("usage: lazy-json [--select <path>] <file.json> or cat file.json | lazy-json [--select <path>]")
+			return fmt.Errorf(usageLine)
 		}
 		return err
 	}
@@ -63,11 +78,25 @@ func run(args []string) error {
 		return nil
 	}
 	if len(typed.ExitOutput) > 0 {
-		if _, err := os.Stdout.Write(typed.ExitOutput); err != nil {
+		if _, err := stdout.Write(typed.ExitOutput); err != nil {
 			return fmt.Errorf("write stdout: %w", err)
 		}
 	}
 	return nil
+}
+
+func helpText() string {
+	return strings.Join([]string{
+		"lazy-json",
+		"",
+		usageLine,
+		"",
+		"flags:",
+		"  --select <path>   open the nearest matching JSON path on startup",
+		"  --help, -h        show this help text",
+		"  --version         show the build version",
+		"",
+	}, "\n")
 }
 
 func parseStartupArgs(args []string) (startupArgs, error) {
@@ -79,6 +108,10 @@ func parseStartupArgs(args []string) (startupArgs, error) {
 		case arg == "--":
 			parsed.InputArgs = append(parsed.InputArgs, args[index+1:]...)
 			return parsed, nil
+		case arg == "--help" || arg == "-h":
+			parsed.ShowHelp = true
+		case arg == "--version":
+			parsed.ShowVersion = true
 		case arg == "--select":
 			if parsed.SelectPath != "" {
 				return startupArgs{}, fmt.Errorf("--select may only be provided once")

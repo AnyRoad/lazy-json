@@ -15,7 +15,7 @@ The editor is intentionally **tree-first and structured**. Do not drift it towar
 
 ## Repo Layout
 
-- `cmd/lazy-json/main.go`
+- `main.go`
   CLI entrypoint. Loads input, parses JSON, starts the Bubble Tea program, and handles stdout-on-exit behavior.
 - `internal/document/`
   Mutable ordered JSON tree.
@@ -38,7 +38,9 @@ The editor is intentionally **tree-first and structured**. Do not drift it towar
   JSON fixtures used for smoke-style checks and examples.
 - `.github/workflows/`
   - `ci.yml`: quality/build checks on pushes and PRs to `release`
-  - `release.yml`: cross-platform release archives on `v*` tags
+  - `release.yml`: GoReleaser-based GitHub release and Homebrew tap publishing on `v*` tags
+- `.goreleaser.yml`
+  Release packaging config for archives, checksums, GitHub release assets, and the `anyroad/homebrew-apps` formula update
 
 ## Core Behavior To Preserve
 
@@ -69,6 +71,8 @@ Preferred repo commands:
 - `make fmt-check`
 - `make vet`
 - `make test`
+- `make release-check`
+- `make release-snapshot`
 - `make build`
 - `make build-all`
 - `make check`
@@ -84,7 +88,7 @@ GOCACHE=/tmp/lazy-json-gocache GOMODCACHE=/tmp/lazy-json-gomodcache make build-a
 ## Testing Expectations
 
 - Run `make check` for normal code changes.
-- If you touch build/release surfaces, also run `make build` or `make build-all`.
+- If you touch build/release surfaces, also run `make build` and the relevant GoReleaser validation targets.
 - Prefer unit/model/update tests over fragile terminal automation.
 - Keep integration tests stubbed where possible for `jq` and editor behavior.
 
@@ -94,7 +98,7 @@ GOCACHE=/tmp/lazy-json-gocache GOMODCACHE=/tmp/lazy-json-gomodcache make build-a
 - Preserve deterministic ordering and stable selection behavior after edits.
 - When replacing subtrees, keep failure modes safe and explicit.
 - Avoid adding hidden formatting-preservation behavior. Current contract is canonical rewrite.
-- Avoid adding extra third-party build/release tooling unless the user explicitly wants it. The repo intentionally uses a plain Makefile plus GitHub Actions, not Goreleaser.
+- Keep GoReleaser as the source of truth for release packaging and Homebrew formula generation unless the user explicitly asks to move away from it.
 
 ## Documentation And Workflow Notes
 
@@ -117,7 +121,7 @@ If you start a non-trivial task, read these files first:
 
 1. `README.md`
 2. `AGENT.md`
-3. `cmd/lazy-json/main.go`
+3. `main.go`
 4. `internal/document/`
 5. `internal/session/`
 6. `internal/tui/model.go`
